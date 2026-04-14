@@ -1,0 +1,455 @@
+import 'package:flutter/material.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'package:shared/models/alert.dart';
+import 'package:shared/models/incident.dart';
+import '../services/triage_service.dart';
+import '../widgets/incident_card.dart';
+import '../widgets/venue_map.dart';
+
+// -----------------------------------------------------------------------------
+// DashboardScreen — CrisisNet Staff Command View
+// Listens to BOTH /alerts/ (raw SOS from guest app) and /incidents/ (triaged by AI)
+// so staff see every emergency the instant it is submitted.
+// -----------------------------------------------------------------------------
+class DashboardScreen extends StatefulWidget {
+  const DashboardScreen({super.key});
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  static const String _venueId = 'mockVenue123';
+
+  String _searchQuery = '';
+  // Triaged incidents (written by AI Cloud Function after classify)
+  List<Incident> _incidents = [];
+  // Raw alerts from guest app (written immediately on SOS button press)
+  List<Alert> _rawAlerts = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _subscribeToIncidents();
+    _subscribeToAlerts();
+  }
+
+  // ─── Firebase Listeners ────────────────────────────────────────────────────
+
+  /// Listens to classifed Incident documents (Module 3 output).
+  void _subscribeToIncidents() {
+    FirebaseDatabase.instance
+        .ref('venues/$_venueId/incidents')
+        .onValue
+        .listen((event) {
+      if (!mounted) return;
+      if (event.snapshot.value == null) {
+        setState(() => _incidents = []);
+        return;
+      }
+      final data = event.snapshot.value;
+      if (data is! Map) return;
+
+      final List<Incident> updated = [];
+      data.forEach((key, value) {
+        if (value is Map) {
+          try {
+            updated.add(Incident.fromMap(Map<dynamic, dynamic>.from(value)));
+          } catch (_) {}
+        }
+      });
+      updated.sort((a, b) => b.severity.compareTo(a.severity));
+      setState(() => _incidents = updated);
+    });
+  }
+
+  /// Listens to raw Alert objects written by the Guest App on SOS.
+  /// Only shows alerts NOT already promoted to an incident.
+  void _subscribeToAlerts() {
+    FirebaseDatabase.instance
+        .ref('venues/$_venueId/alerts')
+        .onValue
+        .listen((event) {
+      if (!mounted) return;
+      if (event.snapshot.value == null) {
+        setState(() => _rawAlerts = []);
+        return;
+      }
+      final data = event.snapshot.value;
+      if (data is! Map) return;
+
+      final List<Alert> updated = [];
+      data.forEach((key, value) {
+        if (value is Map) {
+          try {
+            final alert = Alert.fromMap(Map<dynamic, dynamic>.from(value));
+            
+            // Serverless workaround: Dashboard acts as the triage backend
+            if (alert.status == AlertStatus.pending) {
+              TriageService.processAlert(alert);
+            }
+
+            // Only surface pending alerts — triaged ones appear as Incidents.
+            if (alert.status == AlertStatus.pending || alert.status == AlertStatus.triaged) {
+              updated.add(alert);
+            }
+          } catch (_) {}
+        }
+      });
+      // Newest first
+      updated.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      setState(() => _rawAlerts = updated);
+    });
+  }
+
+  // ─── Actions ───────────────────────────────────────────────────────────────
+
+  void _assignStaff(String incidentId, String staffName) async {
+    final int index = _incidents.indexWhere((i) => i.id == incidentId);
+    if (index == -1) return;
+    final incident = _incidents[index];
+    incident.timeline.add(IncidentUpdate(
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+      updateText: 'Assigned to $staffName',
+    ));
+    await FirebaseDatabase.instance
+        .ref('venues/$_venueId/incidents/$incidentId')
+        .update(incident.toMap());
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$staffName has been dispatched.'),
+        backgroundColor: Colors.green[700],
+      ),
+    );
+  }
+
+  void _escalateIncident(String incidentId) async {
+    final int index = _incidents.indexWhere((i) => i.id == incidentId);
+    if (index == -1) return;
+    final incident = _incidents[index];
+    incident.status = IncidentStatus.escalated;
+    incident.severity = 5;
+    incident.timeline.add(IncidentUpdate(
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+      updateText: 'Escalated to Emergency Services',
+    ));
+    await FirebaseDatabase.instance
+        .ref('venues/$_venueId/incidents/$incidentId')
+        .update(incident.toMap());
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Incident escalated! Emergency Services Protocol Triggered.'),
+        backgroundColor: Colors.red[900],
+      ),
+    );
+  }
+
+  // ─── Build ──────────────────────────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    final filteredIncidents = _incidents.where((i) {
+      final text = _searchQuery.toLowerCase();
+      return i.type.name.toLowerCase().contains(text) ||
+          i.affectedZone.toLowerCase().contains(text);
+    }).toList();
+
+    final filteredAlerts = _rawAlerts.where((a) {
+      final text = _searchQuery.toLowerCase();
+      final typeName = (a.type ?? EmergencyType.other).name.toLowerCase();
+      return typeName.contains(text) ||
+          a.roomNumber.toLowerCase().contains(text) ||
+          a.description.toLowerCase().contains(text);
+    }).toList();
+
+    final int totalCount = _incidents.length + _rawAlerts.length;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Row(
+          children: [
+            const Icon(Icons.admin_panel_settings, color: Colors.white),
+            const SizedBox(width: 12),
+            const Text(
+              'CrisisNet Command Dashboard',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const Spacer(),
+            Chip(
+              backgroundColor: totalCount > 0 ? Colors.red[900] : Colors.grey[800],
+              label: Text(
+                '$totalCount Active ${totalCount == 1 ? 'Alert' : 'Alerts'}',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+            ),
+            const SizedBox(width: 16),
+            const CircleAvatar(
+              backgroundColor: Colors.grey,
+              child: Icon(Icons.person, color: Colors.white),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF1E1E2C),
+        elevation: 1,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1.0),
+          child: Container(color: Colors.white12, height: 1.0),
+        ),
+      ),
+      body: Row(
+        children: [
+          // ── Left Sidebar: Incident + Alert List ──────────────────────────
+          Container(
+            width: 400,
+            decoration: const BoxDecoration(
+              color: Color(0xFF1E1E2C),
+              border: Border(right: BorderSide(color: Colors.white12)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: TextField(
+                    onChanged: (val) => setState(() => _searchQuery = val),
+                    decoration: InputDecoration(
+                      hintText: 'Search by type, room, keyword...',
+                      hintStyle: const TextStyle(color: Colors.white54),
+                      prefixIcon: const Icon(Icons.search, color: Colors.white54),
+                      filled: true,
+                      fillColor: Colors.grey[900],
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ),
+
+                Expanded(
+                  child: ListView(
+                    padding: EdgeInsets.zero,
+                    children: [
+                      // ── Triaged Incidents section ───────────────────────────--
+                      if (filteredIncidents.isNotEmpty) ...[
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                          child: Text(
+                            'AI-TRIAGED INCIDENTS',
+                            style: TextStyle(color: Colors.white54, fontWeight: FontWeight.bold, letterSpacing: 1.2, fontSize: 11),
+                          ),
+                        ),
+                        ...filteredIncidents.map((incident) => IncidentCard(
+                          incidentData: incident,
+                          onAssign: () => _showAssignDialog(context, incident.id),
+                          onEscalate: () => _escalateIncident(incident.id),
+                        )),
+                      ],
+
+                      // ── Raw SOS Alerts section (pending triage) ─────────────
+                      if (filteredAlerts.isNotEmpty) ...[
+                        const Padding(
+                          padding: EdgeInsets.fromLTRB(16, 16, 16, 4),
+                          child: Text(
+                            'INCOMING SOS — PENDING TRIAGE',
+                            style: TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold, letterSpacing: 1.2, fontSize: 11),
+                          ),
+                        ),
+                        ...filteredAlerts.map((alert) => _buildAlertCard(alert)),
+                      ],
+
+                      // ── Empty state ─────────────────────────────────────────
+                      if (filteredIncidents.isEmpty && filteredAlerts.isEmpty)
+                        SizedBox(
+                          height: 400,
+                          child: Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.shield_outlined, size: 64, color: Colors.white12),
+                                const SizedBox(height: 16),
+                                const Text(
+                                  'All Clear',
+                                  style: TextStyle(color: Colors.white38, fontSize: 18, fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 8),
+                                const Text(
+                                  'No active alerts at this venue.',
+                                  style: TextStyle(color: Colors.white24, fontSize: 13),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // ── Main Panel: Venue Map ──────────────────────────────────────────
+          const Expanded(
+            child: Padding(
+              padding: EdgeInsets.all(16.0),
+              child: VenueMap(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Card for raw guest SOS alerts (not yet triaged into incidents by Gemini).
+  Widget _buildAlertCard(Alert alert) {
+    final DateTime time = DateTime.fromMillisecondsSinceEpoch(alert.timestamp);
+    final String timeStr = '${time.hour}:${time.minute.toString().padLeft(2, '0')}';
+
+    Color typeColor;
+    IconData typeIcon;
+    switch (alert.type ?? EmergencyType.other) {
+      case EmergencyType.fire:
+        typeColor = Colors.orange;
+        typeIcon = Icons.local_fire_department;
+        break;
+      case EmergencyType.medical:
+        typeColor = Colors.redAccent;
+        typeIcon = Icons.medical_services;
+        break;
+      case EmergencyType.security:
+        typeColor = Colors.lightBlueAccent;
+        typeIcon = Icons.security;
+        break;
+      case EmergencyType.infrastructure:
+        typeColor = Colors.brown;
+        typeIcon = Icons.construction;
+        break;
+      case EmergencyType.other:
+      default:
+        typeColor = Colors.grey;
+        typeIcon = Icons.warning;
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.grey[900],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orangeAccent.withValues(alpha: 0.5), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.orangeAccent.withValues(alpha: 0.1),
+            blurRadius: 8,
+            spreadRadius: 1,
+          )
+        ]
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(typeIcon, color: typeColor, size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  'SOS: ${(alert.type ?? EmergencyType.other).name.toUpperCase()}',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.orange.withValues(alpha: 0.5)),
+                  ),
+                  child: const Text(
+                    'PENDING TRIAGE',
+                    style: TextStyle(color: Colors.orangeAccent, fontSize: 10, fontWeight: FontWeight.bold),
+                  ),
+                )
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.location_on, size: 13, color: Colors.white54),
+                const SizedBox(width: 4),
+                Text(
+                  'Room ${alert.roomNumber} · Floor ${alert.floor}',
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+                const Spacer(),
+                const Icon(Icons.access_time, size: 13, color: Colors.white54),
+                const SizedBox(width: 4),
+                Text(timeStr, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+              ],
+            ),
+            if (alert.description.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                '"${alert.description}"',
+                style: const TextStyle(color: Colors.white54, fontSize: 13, fontStyle: FontStyle.italic),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+            const SizedBox(height: 8),
+            Text(
+              'Alert ID: ${alert.id.substring(0, 8)}...',
+              style: const TextStyle(color: Colors.white24, fontSize: 11),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showAssignDialog(BuildContext context, String incidentId) {
+    final List<String> staffList = [
+      'Security Team A',
+      'Medical Response 1',
+      'Floor Manager',
+      'Maintenance Crew',
+    ];
+
+    showDialog(
+      context: context,
+      builder: (BuildContext ctx) {
+        return AlertDialog(
+          backgroundColor: Colors.grey[900],
+          title: const Text('Assign Staff', style: TextStyle(color: Colors.white)),
+          content: SizedBox(
+            width: 300,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: staffList.length,
+              itemBuilder: (context, i) {
+                return ListTile(
+                  leading: const CircleAvatar(child: Icon(Icons.person, size: 16)),
+                  title: Text(staffList[i], style: const TextStyle(color: Colors.white)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _assignStaff(incidentId, staffList[i]);
+                  },
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}

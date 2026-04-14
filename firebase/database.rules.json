@@ -1,0 +1,23 @@
+{
+  "rules": {
+    "venues": {
+      "$venueId": {
+        "alerts": {
+          ".read": "auth != null",
+          ".write": "auth != null"
+        },
+        "incidents": {
+          ".read": "auth != null",
+          ".write": "auth != null"
+        },
+        "messages": {
+          ".read": "auth != null",
+          ".write": "auth != null"
+        },
+        "config": {
+          ".read": "auth != null"
+        }
+      }
+    }
+  }
+}

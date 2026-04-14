@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="A new Flutter project.">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="dashboard">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>dashboard</title>
+  <link rel="manifest" href="manifest.json">
+
+  <style>
+    body {
+      background-color: #0d0d0d;
+      margin: 0;
+      padding: 0;
+      font-family: 'Inter', Roboto, sans-serif;
+    }
+    #loading-screen {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #0d0d0d;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+      transition: opacity 0.5s ease;
+    }
+    .pulse-ring {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      border: 3px solid transparent;
+      border-top-color: #ff3b3b;
+      border-bottom-color: #ff3b3b;
+      animation: spin 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+      position: relative;
+    }
+    .pulse-ring::before {
+      content: '';
+      position: absolute;
+      top: 8px; left: 8px; right: 8px; bottom: 8px;
+      border-radius: 50%;
+      border: 3px solid transparent;
+      border-left-color: #ff914d;
+      border-right-color: #ff914d;
+      animation: spin-reverse 0.8s linear infinite;
+    }
+    .loader-text {
+      margin-top: 24px;
+      color: #fff;
+      font-size: 16px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      font-weight: 600;
+      animation: pulse-text 1.5s ease-in-out infinite;
+    }
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+    @keyframes spin-reverse { 100% { transform: rotate(-360deg); } }
+    @keyframes pulse-text {
+      0%, 100% { opacity: 0.5; text-shadow: 0 0 10px rgba(255, 59, 59, 0); }
+      50% { opacity: 1; text-shadow: 0 0 15px rgba(255, 59, 59, 0.6); }
+    }
+  </style>
+</head>
+<body>
+  <div id="loading-screen">
+    <div class="pulse-ring"></div>
+    <div class="loader-text">Loading CrisisNet...</div>
+  </div>
+
+  <script src="flutter_bootstrap.js" async></script>
+  <script>
+    // Poll for the flutter-view or flutter-glass-pane mount to DOM
+    var timer = setInterval(function() {
+      // Either standard canvaskit layer or html layer
+      if (document.querySelector('flutter-view') || document.querySelector('flt-glass-pane') || document.querySelector('flt-scene-host')) {
+         var loader = document.getElementById('loading-screen');
+         if(loader) {
+           loader.style.opacity = '0';
+           setTimeout(() => loader.remove(), 500);
+         }
+         clearInterval(timer);
+      }
+    }, 200);
+
+    // Fallback: remove after 15 seconds regardless, just in case
+    setTimeout(function() {
+      var loader = document.getElementById('loading-screen');
+      if(loader) loader.remove();
+    }, 15000);
+  </script>
+</body>
+</html>
