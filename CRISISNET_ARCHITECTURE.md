@@ -25,23 +25,24 @@ All AI, backend, and infrastructure must use Google technologies as mandated by 
 
 | Layer | Technology | Purpose |
 |---|---|---|
-| Mobile app | Flutter 3.x | Guest SOS app — iOS + Android |
+| Mobile app | Flutter 3.x | Guest SOS app — iOS + Android + Web |
 | Web app | Flutter Web | Staff command dashboard |
-| Realtime backend | Firebase Realtime Database | Sub-100ms incident sync across all clients |
-| Auth | Firebase Authentication | Guest and staff login, role management |
-| Push notifications | Firebase Cloud Messaging (FCM) | Alert staff devices even when app is backgrounded |
-| Serverless backend | Firebase Cloud Functions (Node.js) | Triage pipeline, routing logic, brief generation |
-| Primary AI | Gemini 1.5 Flash (via Vertex AI) | Emergency classification, severity scoring, instruction generation, multilingual support |
-| On-device AI | Gemini Nano (Android) | Offline classification fallback — no internet required |
-| Voice transcription | Google Cloud Speech-to-Text API | Streaming voice-to-text for SOS voice input |
-| Image analysis | Google Cloud Vision API | Analyse guest photos for smoke, injury, damage detection |
-| Translation | Google Cloud Translation API | Fallback language translation for edge cases |
-| Maps | Google Maps SDK (Flutter + JS) | Venue floor plan overlay, incident pinning, GPS |
-| Offline knowledge | Curated HTML assets (Kiwix/ZIM-inspired) | Pre-loaded first aid and emergency reference content |
-| BLE mesh | flutter_blue_plus + custom gossip protocol | Android-only offline device-to-device alert relay |
-| Connectivity detection | connectivity_plus (Flutter package) | Auto-detects tier and switches mode silently |
-| Hosting | Firebase Hosting | Staff dashboard web deployment |
-| Storage | Firebase Storage | Floor plan images, venue assets |
+| Realtime backend | Firebase Realtime Database (Asia-SE1) | Sub-100ms incident sync across all clients |
+| Auth | Firebase Authentication | Guest and staff login (pending integration) |
+| Push notifications | Firebase Cloud Messaging (FCM) | Alert staff devices even when app is backgrounded (pending) |
+| ~~Serverless backend~~ | ~~Firebase Cloud Functions (Node.js)~~ | **Deprecated** — requires Blaze paid plan. Replaced by in-app TriageService. |
+| Primary AI | **Gemini 2.5 Flash (via Google AI Studio Developer API)** | Emergency classification, severity scoring, instruction generation. Called directly from Dashboard Dart code. |
+| On-device AI | Gemini Nano (Android) | Offline classification fallback — planned, not yet implemented |
+| Voice transcription | **`speech_to_text` Flutter package (native OS engine)** | Streams real-time transcription; uses Chrome Web Speech API on web, Siri on iOS, Google on Android — **zero cost, no API key required** |
+| Image analysis | Google Cloud Vision API | Planned — not yet implemented |
+| Translation | Google Cloud Translation API | Planned — not yet implemented |
+| Maps | Google Maps SDK (Flutter + JS) | Venue floor plan overlay, incident pinning (partial implementation) |
+| Offline knowledge | Curated HTML assets | Planned — not yet implemented |
+| BLE mesh | flutter_blue_plus | Planned — not yet implemented |
+| Connectivity detection | connectivity_plus | Planned — not yet implemented |
+| Hosting | Firebase Hosting | Planned deployment target |
+| Storage | Firebase Storage | Planned — not yet implemented |
+| Secret Management | **`flutter_dotenv`** | Keeps API keys out of version control via `.env` + `.gitignore` |
 
 ---
 
@@ -111,66 +112,40 @@ lib/services/dashboard_fcm.dart      — web push notification handler
 
 ---
 
-### Module 3 — AI Triage Engine (Gemini + Cloud Functions)
+### Module 3 — AI Triage Engine (Gemini Developer API — Serverless)
 **Owner: Member 3**
-**Runtime: Firebase Cloud Functions (Node.js)**
+**Runtime: Dart, embedded inside Staff Command Dashboard (`dashboard/lib/services/triage_service.dart`)**
 
-The intelligence layer. Every alert is processed here before being broadcast to staff. Gemini Flash handles classification so no human has to make fast, high-stakes categorisation decisions under pressure.
+> **Architecture Delta:** The original plan used Firebase Cloud Functions (Node.js) with Vertex AI. This required the **Blaze (pay-as-you-go) billing plan**, which was infeasible for a hackathon prototype. The implementation was redesigned to be **fully serverless and zero-cost** by moving the AI logic directly into the Dashboard Flutter Web app.
 
-**Cloud Functions:**
+The intelligence layer. Every alert written to `/venues/{venueId}/alerts/` is intercepted by the Dashboard's real-time listener before it is broadcast to staff. It is immediately classified by Gemini without requiring any backend server.
 
-`classifyAlert(alertId)`
-- Triggered by new write to `/venues/{venueId}/alerts/{alertId}`
-- Fetches alert text + image analysis results
-- Sends to Gemini Flash with structured classification prompt
-- Returns: `{ type, severity, instructions, routingTargets, language, confidence }`
-- Writes result back to alert document in Firebase
-- Falls back to rule-based keyword classifier if Gemini is unavailable
+**How it works:**
+1. Dashboard subscribes to `/venues/{venueId}/alerts/` via Firebase Realtime Database `.onValue` stream.
+2. When a new alert arrives with `status: pending`, `TriageService.processAlert(alert)` is called.
+3. `TriageService` calls **Gemini 2.5 Flash** via the `google_generative_ai` Dart package using the Google AI Studio Developer API key.
+4. Gemini returns a strict JSON object: `{ type, severity, immediateInstructions, escalateToEmergencyServices }`
+5. The service writes the result back to `/alerts/{id}` (updating type, severity, safetyInstructions, status=triaged).
+6. A new structured **Incident** document is written to `/incidents/{id}` for staff to action.
+7. The Guest App listens to its own alert document and surfaces a full-screen modal with Gemini's safety instructions.
 
-`analyseImage(alertId, imageUrl)`
-- Called when guest attaches a photo
-- Sends image to Cloud Vision API for label and object detection
-- Passes detected labels (smoke, fire, blood, injury, damage) to Gemini for contextual interpretation
-- Returns: `{ visualContext, suggestedType, suggestedSeverityBoost }`
-
-`generateInstructions(alertId)`
-- Called after classification completes
-- Sends classification + location + floor to Gemini Flash
-- Generates context-aware safety instructions for the guest
-- Translates to guest's detected language via Cloud Translation API if not English
-- Pushes instructions to guest device via FCM
-
-`detectEscalation(venueId)`
-- Runs every 60 seconds via Cloud Scheduler
-- Checks for clustering alerts (3+ reports from same floor within 5 minutes)
-- Calls Gemini to assess if collective pattern warrants severity upgrade
-- Auto-upgrades severity and notifies staff if threshold crossed
-
-`generateResponderBrief(incidentId)`
-- Triggered manually by staff or automatically at Severity 4+
-- Assembles: incident summary, floor, affected zone, guest count, entry/exit points, floor plan URL, incident timeline
-- Sends to Gemini Flash to produce clean readable brief text
-- Stores as Firebase document, returns shareable public URL
-
-**Gemini prompt engineering guidelines (Member 3 to own):**
-- Always provide structured output format in the prompt — JSON with defined fields
-- Include example inputs and outputs in the system prompt for few-shot accuracy
-- For classification, provide the full enum of emergency types and severity definitions
-- For instructions, include floor number and building type for context-specific output
-- Temperature: 0.2 for classification (deterministic), 0.6 for instruction generation (natural language)
-- Always include a fallback instruction: "If unsure, classify as Other with severity 3"
+**Resilience features implemented:**
+- Exponential backoff retry loop (3 attempts, 1.5s/3s/4.5s delays) to handle rate limiting gracefully.
+- Safety filter bypass (`HarmBlockThreshold.none`) to allow processing of violent emergency descriptions.
+- Fallback logic preserves the user's manually selected emergency type if Gemini fails.
+- Error text is surfaced to the guest modal so failures are visible, not silent.
 
 **Key files:**
 ```
-functions/src/classifyAlert.js
-functions/src/analyseImage.js
-functions/src/generateInstructions.js
-functions/src/detectEscalation.js
-functions/src/generateResponderBrief.js
-functions/src/prompts/classificationPrompt.js   — prompt templates
-functions/src/prompts/instructionPrompt.js
-functions/src/fallback/keywordClassifier.js     — offline rule-based fallback
+dashboard/lib/services/triage_service.dart   — Main AI triage engine (Gemini 2.5 Flash)
+dashboard/lib/screens/dashboard_screen.dart  — Listens to /alerts/ and invokes TriageService
+guest_app/lib/screens/sos_screen.dart        — Listens for triage result and shows instruction modal
 ```
+
+**Secret management:**
+- API Key stored in `dashboard/.env` (gitignored)
+- Loaded at runtime via `flutter_dotenv` package
+- Team members must create their own `.env` file from the shared secret
 
 ---
 

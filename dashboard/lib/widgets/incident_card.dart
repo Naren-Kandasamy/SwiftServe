@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared/models/incident.dart';
 import 'package:shared/models/alert.dart';
+import '../services/pdf_service.dart';
 
 class IncidentCard extends StatelessWidget {
   final Incident incidentData;
@@ -72,16 +73,22 @@ class IncidentCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Icon(_getEmergencyIcon(type), color: severityColor, size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      title,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                    ),
-                  ],
+                Flexible(
+                  child: Row(
+                    children: [
+                      Icon(_getEmergencyIcon(type), color: severityColor, size: 20),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          title,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 8),
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -92,19 +99,19 @@ class IncidentCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
-                        'Level $severity',
+                        'L$severity',
                         style: TextStyle(color: severityColor, fontWeight: FontWeight.bold, fontSize: 12),
                       ),
                     ),
                     if (escalated) ...[
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: Colors.red[900]?.withValues(alpha: 0.5),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Text('ESCALATED', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                        child: const Text('ESC', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 12)),
                       ),
                     ],
                   ],
@@ -125,45 +132,60 @@ class IncidentCard extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             
-            // Assignment Status or Buttons
-            if (assigned != null)
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.green.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.green.withValues(alpha: 0.5)),
+            // Action Buttons
+            const SizedBox(height: 12),
+            const Divider(color: Colors.white12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                TextButton.icon(
+                  onPressed: () => PdfService.generateBrief(incidentData),
+                  icon: const Icon(Icons.picture_as_pdf, color: Colors.blueAccent, size: 16),
+                  label: const Text('Brief', style: TextStyle(color: Colors.blueAccent)),
+                  style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
                 ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.check_circle, color: Colors.green, size: 16),
-                    const SizedBox(width: 8),
-                    Text('Assigned to: $assigned', style: const TextStyle(color: Colors.green, fontSize: 13, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-              )
-            else
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: onAssign,
-                    child: const Text('Assign Staff', style: TextStyle(color: Colors.lightBlue)),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: escalated ? null : onEscalate,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red[900],
-                      foregroundColor: Colors.white,
-                      disabledBackgroundColor: Colors.grey[800],
-                      disabledForegroundColor: Colors.white30,
-                      minimumSize: const Size(80, 36),
+                
+                if (assigned != null)
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.green.withValues(alpha: 0.5)),
                     ),
-                    child: Text(escalated ? 'Escalated' : 'Escalate'),
-                  ),
-                ],
-              )
+                    child: Row(
+                      children: [
+                        const Icon(Icons.check_circle, color: Colors.green, size: 14),
+                        const SizedBox(width: 4),
+                        Text('Assigned to: $assigned', style: const TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  )
+                else
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextButton(
+                        onPressed: onAssign,
+                        style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                        child: const Text('Assign', style: TextStyle(color: Colors.lightBlue)),
+                      ),
+                      const SizedBox(width: 4),
+                      ElevatedButton(
+                        onPressed: escalated ? null : onEscalate,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red[900],
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: Colors.grey[800],
+                          disabledForegroundColor: Colors.white30,
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        child: Text(escalated ? 'Escalated' : 'Escalate'),
+                      ),
+                    ],
+                  )
+              ],
+            )
           ],
         ),
       ),

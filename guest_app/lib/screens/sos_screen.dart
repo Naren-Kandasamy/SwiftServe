@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:uuid/uuid.dart';
 import 'package:shared/models/alert.dart';
 import 'package:flutter/services.dart';
+import 'status_screen.dart';
 
 class SosScreen extends StatefulWidget {
   const SosScreen({super.key});
@@ -23,6 +25,9 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
   bool _isListening = false;
   bool _isSubmitting = false;
   double _soundLevel = 0.0;
+  
+  String _selectedFloor = '1';
+  String _selectedRoom = '101';
 
   final List<Map<String, dynamic>> _emergencyTypes = [
     {'name': 'Fire', 'icon': Icons.local_fire_department, 'color': Colors.orangeAccent},
@@ -60,6 +65,82 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
         const SnackBar(content: Text('Photo attached successfully!'), duration: Duration(milliseconds: 1500)),
       );
     }
+  }
+
+  Future<void> _showLocationPicker() async {
+    String tempFloor = _selectedFloor;
+    TextEditingController roomController = TextEditingController(text: _selectedRoom);
+
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.grey[900],
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      isScrollControlled: true,
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom + 24, 
+          left: 24, 
+          right: 24, 
+          top: 24
+        ),
+        child: StatefulBuilder(
+          builder: (context, setModalState) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Current Location', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 20),
+                DropdownButtonFormField<String>(
+                  value: tempFloor,
+                  dropdownColor: Colors.grey[800],
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: 'Floor',
+                    labelStyle: const TextStyle(color: Colors.white70),
+                    filled: true,
+                    fillColor: Colors.grey[850],
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  ),
+                  items: ['1', '2', '3', '4', '5'].map((f) => DropdownMenuItem(value: f, child: Text('Floor $f'))).toList(),
+                  onChanged: (val) => setModalState(() => tempFloor = val!),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: roomController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: 'Room / Area (e.g. 101, Lobby)',
+                    labelStyle: const TextStyle(color: Colors.white70),
+                    filled: true,
+                    fillColor: Colors.grey[850],
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueAccent,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _selectedFloor = tempFloor;
+                        _selectedRoom = roomController.text;
+                      });
+                      Navigator.pop(context);
+                    },
+                    child: const Text('Update Location', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            );
+          }
+        ),
+      ),
+    );
   }
 
   Future<void> _toggleListen() async {
@@ -109,7 +190,7 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 20.0),
+                  padding: EdgeInsets.symmetric(vertical: 16.0),
                   child: Text(
                     'CRISISNET',
                     textAlign: TextAlign.center,
@@ -122,6 +203,34 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
                   ),
                 ),
                 
+                // Location Selector Banner
+                InkWell(
+                  onTap: _showLocationPicker,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.blueAccent.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.4)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.location_on, color: Colors.blueAccent, size: 20),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Floor $_selectedFloor, Room $_selectedRoom', 
+                            style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)
+                          ),
+                        ),
+                        const Text('CHANGE', style: TextStyle(color: Colors.blueAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                
                 const Text(
                   'What is your emergency?',
                   textAlign: TextAlign.center,
@@ -131,7 +240,7 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
                     fontWeight: FontWeight.w400,
                   ),
                 ),
-                const SizedBox(height: 30),
+                const SizedBox(height: 20),
                 
                 Expanded(
                   flex: 2,
@@ -427,12 +536,63 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
   Future<void> _triggerSOS() async {
     if (_isSubmitting) return;
 
+    // Strict Location Privacy Gate (GDPR compliant)
+    bool? consentGiven = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: const Row(
+          children: [
+            Icon(Icons.privacy_tip, color: Colors.blueAccent),
+            SizedBox(width: 10),
+            Expanded(child: Text('Location Tracking Consent', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold))),
+          ],
+        ),
+        content: const Text(
+          'Your location (Room/Floor) will be shared with front desk staff exclusively to dispatch emergency responders.\n\nThere is no background tracking. The location pin is temporary and is destroyed the moment the incident closes.\n\nDo you consent to sharing your location?',
+          style: TextStyle(color: Colors.white70, height: 1.4),
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('CANCEL', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red[800],
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('I AGREE - SEND SOS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (consentGiven != true) {
+      return; // Fallback to safe zero-action state if they reject
+    }
+
     HapticFeedback.heavyImpact();
     setState(() => _isSubmitting = true);
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     
     try {
       final String alertId = const Uuid().v4();
+      
+      String? finalImageUrl;
+      if (_attachedImage != null) {
+        try {
+          final ref = FirebaseStorage.instance.ref('venues/mockVenue123/alerts/images/$alertId');
+          await ref.putData(await _attachedImage!.readAsBytes());
+          finalImageUrl = await ref.getDownloadURL();
+        } catch (e) {
+          debugPrint('Failed to upload SOS photo: $e');
+        }
+      }
+
       EmergencyType parsedType = EmergencyType.values.firstWhere(
         (e) => e.name.toLowerCase() == _selectedEmergencyType?.toLowerCase(),
         orElse: () => EmergencyType.other,
@@ -442,10 +602,10 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
         id: alertId,
         userId: 'mockUser99', // TODO: Firebase Auth UID
         venueId: 'mockVenue123',
-        roomNumber: '101',    // TODO: Dynamic from check-in
-        floor: 1,
+        roomNumber: _selectedRoom,
+        floor: int.tryParse(_selectedFloor) ?? 1,
         description: _descController.text,
-        imageUrl: _attachedImage?.path, // Pending actual Storage upload
+        imageUrl: finalImageUrl, 
         type: parsedType,
         location: const GeoPoint(0.0, 0.0), // TODO: GPS
         timestamp: DateTime.now().millisecondsSinceEpoch,
@@ -460,19 +620,11 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
           .set(alert.toMap())
           .timeout(const Duration(seconds: 15));
 
-      // Hook up the live AI listener to catch the instructions
-      _listenForAITriage(alertId, alert.venueId);
-
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(children: [
-            const Icon(Icons.check_circle_outline, color: Colors.white),
-            const SizedBox(width: 12),
-            Expanded(child: Text('SOS Dispatched Successfully!', style: const TextStyle(fontWeight: FontWeight.bold))),
-          ]),
-          backgroundColor: Colors.green[600],
-          duration: const Duration(seconds: 3),
+      
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (context) => StatusScreen(alertId: alertId),
         ),
       );
     } catch (e) {

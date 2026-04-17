@@ -36,8 +36,14 @@ dependencies:
   cupertino_icons: ^1.0.8
   firebase_core: any
   firebase_database: any
+  firebase_storage: any
   google_generative_ai: ^0.4.3
   flutter_dotenv: ^5.1.0
+  file_picker: ^8.0.0+1
+  http: any
+  pdf: ^3.10.8
+  printing: ^5.11.1
+  intl: any
   shared:
     path: ../shared
 

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:firebase_database/firebase_database.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:shared/models/alert.dart';
@@ -20,24 +21,34 @@ class TriageService {
     _processingIds.add(alert.id);
     print('[TriageService] Intercepted new SOS alert: ${alert.id}. Querying Gemini...');
 
-    final model = GenerativeModel(
-      model: 'gemini-2.5-flash',
-      apiKey: _geminiApiKey,
-      generationConfig: GenerationConfig(
-        temperature: 0.1,
-        responseMimeType: 'application/json',
-      ),
-      safetySettings: [
-        SafetySetting(HarmCategory.dangerousContent, HarmBlockThreshold.none),
-        SafetySetting(HarmCategory.harassment, HarmBlockThreshold.none),
-        SafetySetting(HarmCategory.hateSpeech, HarmBlockThreshold.none),
-        SafetySetting(HarmCategory.sexuallyExplicit, HarmBlockThreshold.none),
-      ],
-    );
+    GenerativeModel? model;
+    
+    try {
+      if (_geminiApiKey.isNotEmpty && _geminiApiKey.length > 10 && _geminiApiKey != 'YOUR_GEMINI_API_KEY') {
+        model = GenerativeModel(
+          model: 'gemini-2.5-flash',
+          apiKey: _geminiApiKey,
+          generationConfig: GenerationConfig(
+            temperature: 0.1,
+            responseMimeType: 'application/json',
+          ),
+          safetySettings: [
+            SafetySetting(HarmCategory.dangerousContent, HarmBlockThreshold.none),
+            SafetySetting(HarmCategory.harassment, HarmBlockThreshold.none),
+            SafetySetting(HarmCategory.hateSpeech, HarmBlockThreshold.none),
+            SafetySetting(HarmCategory.sexuallyExplicit, HarmBlockThreshold.none),
+          ],
+        );
+      }
+    } catch (_) {
+      model = null;
+    }
 
     final prompt = '''
 You are an emergency triage AI for a hospitality venue.
 Classify the incoming guest SOS alert and return ONLY valid JSON.
+CRITICAL: If an image is provided alongside this text, inspect it thoroughly. If you detect ANY visual evidence of smoke, fire, weapons, significant blood, or structural collapse, aggressively boost the severity score to 4 or 5 and set escalateToEmergencyServices to true regardless of the guest's text description.
+
 Output format:
 {
   "type": "fire" | "medical" | "security" | "infrastructure" | "other",
@@ -61,10 +72,22 @@ Location: Room ${alert.roomNumber}, Floor ${alert.floor}
     bool success = false;
     String lastError = '';
 
-    if (_geminiApiKey != 'YOUR_GEMINI_API_KEY') {
+    if (model != null) {
+      List<Part> parts = [TextPart(prompt)];
+      if (alert.imageUrl != null && alert.imageUrl!.isNotEmpty) {
+        try {
+          print('[TriageService] Fetching SOS image attached to this alert...');
+          final imageBytes = await http.readBytes(Uri.parse(alert.imageUrl!));
+          parts.add(DataPart('image/jpeg', imageBytes));
+          print('[TriageService] Image streamed into Gemini memory block successfully!');
+        } catch(e) {
+          print('[TriageService] Could not fetch image for multimodal: $e');
+        }
+      }
+
       for (int i = 0; i < maxRetries; i++) {
         try {
-          final response = await model.generateContent([Content.text(prompt)]);
+          final response = await model.generateContent([Content.multi(parts)]);
           final text = response.text ?? '';
           final cleanJson = text.replaceAll('```json', '').replaceAll('```', '').trim();
           triageResult = jsonDecode(cleanJson);
@@ -73,7 +96,7 @@ Location: Room ${alert.roomNumber}, Floor ${alert.floor}
           break; // Exit loop on success
         } catch (e) {
           lastError = e.toString().split('\n').first;
-          print('[TriageService] Gemini attempt \${i+1} failed: \$lastError');
+          print('[TriageService] Gemini attempt ${i+1} failed: $lastError');
           
           // Exponential backoff buffer before hitting the free tier limit again
           if (i < maxRetries - 1) {
@@ -83,7 +106,7 @@ Location: Room ${alert.roomNumber}, Floor ${alert.floor}
       }
       
       if (!success) {
-        triageResult['immediateInstructions'] = 'AI Engine Rate Limiting: \$lastError\n\nHelp is still on the way.';
+        triageResult['immediateInstructions'] = 'AI Exception: $lastError\n\nHelp is still on the way.';
       }
     } else {
       print('[TriageService] API key not found. Using fallback placeholder classification.');
