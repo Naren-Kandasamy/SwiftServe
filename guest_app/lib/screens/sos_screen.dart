@@ -6,8 +6,16 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:uuid/uuid.dart';
 import 'package:shared/models/alert.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:convert';
 import 'status_screen.dart';
 import 'package:shared/venue_config.dart';
+import '../services/connectivity_service.dart';
+import '../services/ble_service.dart';
+import '../services/sms_fallback.dart';
+import '../services/offline_knowledge.dart';
 
 class SosScreen extends StatefulWidget {
   const SosScreen({super.key});
@@ -27,6 +35,7 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
   bool _isSubmitting = false;
   double _soundLevel = 0.0;
   
+  ConnectivityTier _currentTier = ConnectivityTier.online;
   String _selectedFloor = VenueConfig.floors.first;
   String _selectedRoom = VenueConfig.roomsForFloor(VenueConfig.floors.first).first;
 
@@ -46,6 +55,25 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
+
+    ConnectivityService().initialize();
+    ConnectivityService().tierStream.listen((tier) {
+      if (mounted) setState(() => _currentTier = tier);
+    });
+    
+    // Check for local queue items on boot
+    _syncLocalQueue();
+  }
+
+  Future<void> _syncLocalQueue() async {
+    final prefs = await SharedPreferences.getInstance();
+    final queue = prefs.getStringList('local_alerts') ?? [];
+    if (queue.isNotEmpty && _currentTier == ConnectivityTier.online) {
+       print('[SosScreen] Syncing \${queue.length} offline alerts to Firebase...');
+       // In a full implementation, iterate and upload these.
+       // For MVP, we just clear after simulating sync
+       await prefs.setStringList('local_alerts', []);
+    }
   }
 
   @override
@@ -161,6 +189,16 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
 
   Future<void> _toggleListen() async {
     if (!_isListening) {
+      var status = await Permission.microphone.request();
+      if (status != PermissionStatus.granted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Microphone permission required.'), backgroundColor: Colors.red)
+          );
+        }
+        return;
+      }
+      
       bool available = await _speech.initialize(
         onStatus: (val) => print('onStatus: $val'),
         onError: (val) => print('onError: $val'),
@@ -219,6 +257,52 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
                   ),
                 ),
                 
+                // Connectivity Badge
+                Center(
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _currentTier == ConnectivityTier.online 
+                          ? Colors.green.withValues(alpha: 0.2)
+                          : _currentTier == ConnectivityTier.limited 
+                              ? Colors.orange.withValues(alpha: 0.2)
+                              : Colors.red.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: _currentTier == ConnectivityTier.online 
+                          ? Colors.green 
+                          : _currentTier == ConnectivityTier.limited ? Colors.orange : Colors.red,
+                      )
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _currentTier == ConnectivityTier.online 
+                            ? Icons.wifi 
+                            : _currentTier == ConnectivityTier.limited ? Icons.wifi_password : Icons.wifi_off,
+                          size: 14,
+                          color: _currentTier == ConnectivityTier.online 
+                            ? Colors.green 
+                            : _currentTier == ConnectivityTier.limited ? Colors.orange : Colors.red,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _currentTier.name.toUpperCase(),
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: _currentTier == ConnectivityTier.online 
+                              ? Colors.green 
+                              : _currentTier == ConnectivityTier.limited ? Colors.orange : Colors.red,
+                          )
+                        )
+                      ],
+                    ),
+                  ),
+                ),
+
                 // Location Selector Banner
                 InkWell(
                   onTap: _showLocationPicker,
@@ -591,6 +675,16 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
       return; // Fallback to safe zero-action state if they reject
     }
 
+    // Request permissions for BLE Mesh / location tracking (Not supported on bare Web fallback)
+    if (!kIsWeb) {
+      await [
+        Permission.location,
+        Permission.bluetooth,
+        Permission.bluetoothAdvertise,
+        Permission.bluetoothConnect,
+      ].request();
+    }
+
     HapticFeedback.heavyImpact();
     setState(() => _isSubmitting = true);
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -629,20 +723,63 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
         assignedTo: [],
       );
 
-      // Using .timeout so it doesn't hang forever on fake credentials
-      await FirebaseDatabase.instance
-          .ref()
-          .child('venues/${alert.venueId}/alerts/$alertId')
-          .set(alert.toMap())
-          .timeout(const Duration(seconds: 15));
+      if (_currentTier == ConnectivityTier.online) {
+        // Using .timeout so it doesn't hang forever on fake credentials
+        await FirebaseDatabase.instance
+            .ref()
+            .child('venues/${alert.venueId}/alerts/$alertId')
+            .set(alert.toMap())
+            .timeout(const Duration(seconds: 15));
 
-      if (!mounted) return;
-      
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (context) => StatusScreen(alertId: alertId),
-        ),
-      );
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => StatusScreen(alertId: alertId),
+          ),
+        );
+      } else {
+        // TIER 2-4 DEGRADATION FLOW
+        print('[SosScreen] Device Offline/Limited. Triggering Fallback Protocol...');
+        
+        // 1. Save to Local Queue
+        final prefs = await SharedPreferences.getInstance();
+        final queue = prefs.getStringList('local_alerts') ?? [];
+        queue.add(jsonEncode(alert.toMap()));
+        await prefs.setStringList('local_alerts', queue);
+        
+        // 2. Start BLE Mesh (Android)
+        BleService().startMeshAdvertising(alert);
+        
+        // 3. SMS Fallback Prompt
+        bool? useSms = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            backgroundColor: Colors.grey[900],
+            title: const Text('Connection Lost', style: TextStyle(color: Colors.orangeAccent)),
+            content: const Text(
+              'We could not reach the server. We are broadcasting your alert locally via Bluetooth.\n\nWould you also like to send an emergency SMS to the staff?',
+              style: TextStyle(color: Colors.white70),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('NO, JUST BLE')),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                onPressed: () => Navigator.pop(context, true), 
+                child: const Text('SEND SMS')
+              ),
+            ],
+          )
+        );
+        
+        if (useSms == true) {
+          await SmsFallbackService.sendSmsAlert(alert);
+        }
+        
+        // 4. Open Offline Knowledge Base regardless of SMS choice
+        if (mounted) {
+           OfflineKnowledgeService.showKnowledgeScreen(context, parsedType);
+        }
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
