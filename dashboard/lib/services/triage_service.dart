@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:shared/models/alert.dart';
@@ -83,16 +83,39 @@ Location: Room ${alert.roomNumber}, Floor ${alert.floor}
     bool success = false;
     String lastError = '';
 
+    String? resolvedImageUrl = alert.imageUrl;
+
+    // If imageUrl wasn't present when the alert first arrived (background upload still in progress),
+    // poll Firebase for up to 30 seconds to give the guest app time to patch it in.
+    if (resolvedImageUrl == null) {
+      print('[TriageService] imageUrl is null — waiting up to 30s for background upload...');
+      for (int wait = 0; wait < 15; wait++) {
+        await Future.delayed(const Duration(seconds: 2));
+        final snap = await FirebaseDatabase.instance
+            .ref('venues/$_venueId/alerts/${alert.id}/imageUrl')
+            .get();
+        if (snap.value != null && snap.value.toString().isNotEmpty) {
+          resolvedImageUrl = snap.value as String?;
+          print('[TriageService] imageUrl arrived after ${(wait + 1) * 2}s: $resolvedImageUrl');
+          break;
+        }
+      }
+    }
+
     if (model != null) {
       List<Part> parts = [TextPart(prompt)];
-      if (alert.imageUrl != null && alert.imageUrl!.isNotEmpty) {
+
+      if (resolvedImageUrl != null && resolvedImageUrl.isNotEmpty) {
         try {
-          print('[TriageService] Fetching SOS image attached to this alert...');
-          final imageBytes = await http.readBytes(Uri.parse(alert.imageUrl!));
-          parts.add(DataPart('image/jpeg', imageBytes));
-          print('[TriageService] Image streamed into Gemini memory block successfully!');
+          print('[TriageService] Fetching SOS image for multimodal triage...');
+          final ref = FirebaseStorage.instance.refFromURL(resolvedImageUrl);
+          final imageBytes = await ref.getData(10 * 1024 * 1024); // 10MB limit
+          if (imageBytes != null) {
+            parts.add(DataPart('image/jpeg', imageBytes));
+            print('[TriageService] Image (${imageBytes.length} bytes) streamed into Gemini context.');
+          }
         } catch(e) {
-          print('[TriageService] Could not fetch image for multimodal: $e');
+          print('[TriageService] Could not fetch image for multimodal (skipping): $e');
         }
       }
 
@@ -150,6 +173,7 @@ Location: Room ${alert.roomNumber}, Floor ${alert.floor}
       status: (triageResult['escalateToEmergencyServices'] == true) ? IncidentStatus.escalated : IncidentStatus.active,
       guestCount: 1,
       createdAt: timestamp,
+      imageUrl: resolvedImageUrl, // pass down the resolved image URL
       timeline: [
         IncidentUpdate(timestamp: timestamp, updateText: 'SOS Received: "${alert.description}"'),
         IncidentUpdate(timestamp: timestamp + 50, updateText: 'AI Triaged as ${parsedType.name.toUpperCase()} (Severity ${triageResult['severity'] ?? 3}).')

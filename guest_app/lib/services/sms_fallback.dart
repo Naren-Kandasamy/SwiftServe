@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared/models/alert.dart';
 
@@ -7,14 +8,18 @@ class SmsFallbackService {
 
   static Future<bool> sendSmsAlert(Alert alert) async {
     final typeName = alert.type?.name.toUpperCase() ?? 'UNKNOWN';
-    final severityStr = alert.severity != null ? 'Lvl \${alert.severity}' : 'Lvl ?';
+    final severityStr = alert.severity != null ? 'Lvl ${alert.severity}' : 'Lvl ?';
     
-    // Construct a compact SMS message (under 160 characters ideally)
+    // Truncate description to keep full message under 160 chars
+    final desc = alert.description;
+    final truncatedDesc = desc.length > 60 ? '${desc.substring(0, 60)}...' : desc;
+    
+    // Construct a compact SMS message (under 160 characters)
     final String message = 
-      'CRISISNET SOS: \$typeName (\$severityStr) '
-      'ID: \${alert.id.substring(0, 8)} '
-      'Loc: Rm \${alert.roomNumber}, Fl \${alert.floor} '
-      'Desc: \${alert.description}';
+      'CRISISNET SOS: $typeName ($severityStr) '
+      'ID: ${alert.id.substring(0, 8)} '
+      'Loc: Rm ${alert.roomNumber}, Fl ${alert.floor} '
+      'Desc: $truncatedDesc';
 
     try {
       final Uri smsUri = Uri(

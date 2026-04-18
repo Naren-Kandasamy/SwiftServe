@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
@@ -11,9 +12,11 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:convert';
 import 'status_screen.dart';
+import 'knowledge_library_screen.dart';
 import 'package:shared/venue_config.dart';
 import '../services/connectivity_service.dart';
 import '../services/ble_service.dart';
+import '../services/ble_scanner_service.dart';
 import '../services/sms_fallback.dart';
 import '../services/offline_knowledge.dart';
 
@@ -36,6 +39,7 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
   double _soundLevel = 0.0;
   
   ConnectivityTier _currentTier = ConnectivityTier.online;
+  StreamSubscription<ConnectivityTier>? _tierSubscription;
   String _selectedFloor = VenueConfig.floors.first;
   String _selectedRoom = VenueConfig.roomsForFloor(VenueConfig.floors.first).first;
 
@@ -57,7 +61,7 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
     )..repeat(reverse: true);
 
     ConnectivityService().initialize();
-    ConnectivityService().tierStream.listen((tier) {
+    _tierSubscription = ConnectivityService().tierStream.listen((tier) {
       if (mounted) setState(() => _currentTier = tier);
     });
     
@@ -66,18 +70,34 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
   }
 
   Future<void> _syncLocalQueue() async {
+    if (_currentTier != ConnectivityTier.online) return;
     final prefs = await SharedPreferences.getInstance();
     final queue = prefs.getStringList('local_alerts') ?? [];
-    if (queue.isNotEmpty && _currentTier == ConnectivityTier.online) {
-       print('[SosScreen] Syncing \${queue.length} offline alerts to Firebase...');
-       // In a full implementation, iterate and upload these.
-       // For MVP, we just clear after simulating sync
-       await prefs.setStringList('local_alerts', []);
+    if (queue.isEmpty) return;
+
+    print('[SosScreen] Syncing ${queue.length} offline alerts to Firebase...');
+    final List<String> failed = [];
+    for (final jsonStr in queue) {
+      try {
+        final Map<String, dynamic> alertMap = Map<String, dynamic>.from(jsonDecode(jsonStr));
+        final alertId = alertMap['id'] as String;
+        final venueId = alertMap['venueId'] as String;
+        await FirebaseDatabase.instance
+            .ref('venues/$venueId/alerts/$alertId')
+            .set(alertMap)
+            .timeout(const Duration(seconds: 10));
+        print('[SosScreen] Synced offline alert $alertId successfully.');
+      } catch (e) {
+        print('[SosScreen] Failed to sync alert, keeping in queue: $e');
+        failed.add(jsonStr); // Keep failed ones for next attempt
+      }
     }
+    await prefs.setStringList('local_alerts', failed);
   }
 
   @override
   void dispose() {
+    _tierSubscription?.cancel();
     _pulseController.dispose();
     _descController.dispose();
     super.dispose();
@@ -85,7 +105,11 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
 
   Future<void> _attachPhoto() async {
     final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.camera);
+    final XFile? image = await picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 50,
+      maxWidth: 800,
+    );
     if (image != null) {
       setState(() {
         _attachedImage = image;
@@ -243,17 +267,34 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16.0),
-                  child: Text(
-                    'CRISISNET',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 4.0,
-                    ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16.0),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      const Text(
+                        'CRISISNET',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 4.0,
+                        ),
+                      ),
+                      Positioned(
+                        right: 0,
+                        child: IconButton(
+                          icon: const Icon(Icons.menu_book, color: Colors.white70),
+                          tooltip: 'Offline Emergency Library',
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(builder: (_) => const KnowledgeLibraryScreen()),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 
@@ -692,17 +733,6 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
     try {
       final String alertId = const Uuid().v4();
       
-      String? finalImageUrl;
-      if (_attachedImage != null) {
-        try {
-          final ref = FirebaseStorage.instance.ref('venues/mockVenue123/alerts/images/$alertId');
-          await ref.putData(await _attachedImage!.readAsBytes());
-          finalImageUrl = await ref.getDownloadURL();
-        } catch (e) {
-          debugPrint('Failed to upload SOS photo: $e');
-        }
-      }
-
       EmergencyType parsedType = EmergencyType.values.firstWhere(
         (e) => e.name.toLowerCase() == _selectedEmergencyType?.toLowerCase(),
         orElse: () => EmergencyType.other,
@@ -715,7 +745,7 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
         roomNumber: _selectedRoom,
         floor: int.tryParse(_selectedFloor) ?? 1,
         description: _descController.text,
-        imageUrl: finalImageUrl, 
+        imageUrl: null, // Written immediately — image patches in below
         type: parsedType,
         location: const GeoPoint(0.0, 0.0), // TODO: GPS
         timestamp: DateTime.now().millisecondsSinceEpoch,
@@ -737,6 +767,27 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
             builder: (context) => StatusScreen(alertId: alertId),
           ),
         );
+
+        // Background image upload — fires AFTER navigation so guest isn't blocked
+        // TriageService waits up to 10s for imageUrl to appear before calling Gemini
+        if (_attachedImage != null) {
+          Future(() async {
+            try {
+              final ref = FirebaseStorage.instance
+                  .ref('venues/mockVenue123/alerts/images/$alertId');
+              await ref.putData(await _attachedImage!.readAsBytes())
+                  .timeout(const Duration(seconds: 30));
+              final url = await ref.getDownloadURL()
+                  .timeout(const Duration(seconds: 10));
+              await FirebaseDatabase.instance
+                  .ref('venues/${alert.venueId}/alerts/$alertId')
+                  .update({'imageUrl': url});
+              debugPrint('[SosScreen] Image uploaded + patched into alert: $alertId');
+            } catch (e) {
+              debugPrint('[SosScreen] Background image upload failed (non-fatal): $e');
+            }
+          });
+        }
       } else {
         // TIER 2-4 DEGRADATION FLOW
         print('[SosScreen] Device Offline/Limited. Triggering Fallback Protocol...');
@@ -747,8 +798,12 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
         queue.add(jsonEncode(alert.toMap()));
         await prefs.setStringList('local_alerts', queue);
         
-        // 2. Start BLE Mesh (Android)
-        BleService().startMeshAdvertising(alert);
+        // 2. Start BLE Mesh Peripheral (advertise alert as beacon)
+        await BleService().startMeshAdvertising(alert);
+        
+        // Also start scanning — this device becomes a relay node in the mesh
+        // It will pick up and retransmit beacons from other nearby devices
+        BleScannerService().startScanning(venueId: alert.venueId);
         
         // 3. SMS Fallback Prompt
         bool? useSms = await showDialog<bool>(

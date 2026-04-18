@@ -17,7 +17,12 @@ class ConnectivityService {
   ConnectivityTier get currentTier => _currentTier;
   Stream<ConnectivityTier> get tierStream => _tierController.stream;
 
+  bool _initialized = false;
+
   void initialize() {
+    if (_initialized) return; // Guard against duplicate listener registration
+    _initialized = true;
+
     _connectivity.onConnectivityChanged.listen((List<ConnectivityResult> results) {
       // In connectivity_plus > 6.0, it returns a List<ConnectivityResult>
       _handleConnectivityResults(results);
