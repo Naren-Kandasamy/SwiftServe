@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import 'package:shared/models/alert.dart';
 import 'package:flutter/services.dart';
 import 'status_screen.dart';
+import 'package:shared/venue_config.dart';
 
 class SosScreen extends StatefulWidget {
   const SosScreen({super.key});
@@ -26,8 +27,8 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
   bool _isSubmitting = false;
   double _soundLevel = 0.0;
   
-  String _selectedFloor = '1';
-  String _selectedRoom = '101';
+  String _selectedFloor = VenueConfig.floors.first;
+  String _selectedRoom = VenueConfig.roomsForFloor(VenueConfig.floors.first).first;
 
   final List<Map<String, dynamic>> _emergencyTypes = [
     {'name': 'Fire', 'icon': Icons.local_fire_department, 'color': Colors.orangeAccent},
@@ -69,7 +70,7 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
 
   Future<void> _showLocationPicker() async {
     String tempFloor = _selectedFloor;
-    TextEditingController roomController = TextEditingController(text: _selectedRoom);
+    String tempRoom = _selectedRoom;
 
     await showModalBottomSheet(
       context: context,
@@ -79,17 +80,22 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
       builder: (context) => Padding(
         padding: EdgeInsets.only(
           bottom: MediaQuery.of(context).viewInsets.bottom + 24, 
-          left: 24, 
-          right: 24, 
-          top: 24
+          left: 24, right: 24, top: 24
         ),
         child: StatefulBuilder(
           builder: (context, setModalState) {
+            final rooms = VenueConfig.roomsForFloor(tempFloor);
+            // Reset room if it doesn't exist on the new floor
+            if (!rooms.contains(tempRoom)) tempRoom = rooms.first;
+
             return Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('Current Location', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                const Text('Set Your Location', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                const Text('This is shared with front desk staff only', style: TextStyle(color: Colors.white38, fontSize: 12)),
                 const SizedBox(height: 20),
+                // Floor selector
                 DropdownButtonFormField<String>(
                   value: tempFloor,
                   dropdownColor: Colors.grey[800],
@@ -101,20 +107,30 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
                     fillColor: Colors.grey[850],
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                   ),
-                  items: ['1', '2', '3', '4', '5'].map((f) => DropdownMenuItem(value: f, child: Text('Floor $f'))).toList(),
-                  onChanged: (val) => setModalState(() => tempFloor = val!),
+                  items: VenueConfig.floors.map((f) => DropdownMenuItem(value: f, child: Text('Floor $f'))).toList(),
+                  onChanged: (val) => setModalState(() { 
+                    tempFloor = val!;
+                    final newRooms = VenueConfig.roomsForFloor(tempFloor);
+                    tempRoom = newRooms.first;
+                  }),
                 ),
                 const SizedBox(height: 16),
-                TextField(
-                  controller: roomController,
+                // Room selector — auto-refreshes when floor changes
+                DropdownButtonFormField<String>(
+                  value: tempRoom,
+                  dropdownColor: Colors.grey[800],
                   style: const TextStyle(color: Colors.white),
                   decoration: InputDecoration(
-                    labelText: 'Room / Area (e.g. 101, Lobby)',
+                    labelText: 'Room / Area',
                     labelStyle: const TextStyle(color: Colors.white70),
                     filled: true,
                     fillColor: Colors.grey[850],
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                   ),
+                  items: VenueConfig.roomsForFloor(tempFloor)
+                      .map((r) => DropdownMenuItem(value: r, child: Text(r)))
+                      .toList(),
+                  onChanged: (val) => setModalState(() => tempRoom = val!),
                 ),
                 const SizedBox(height: 24),
                 SizedBox(
@@ -128,11 +144,11 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
                     onPressed: () {
                       setState(() {
                         _selectedFloor = tempFloor;
-                        _selectedRoom = roomController.text;
+                        _selectedRoom = tempRoom;
                       });
                       Navigator.pop(context);
                     },
-                    child: const Text('Update Location', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    child: const Text('Confirm Location', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],

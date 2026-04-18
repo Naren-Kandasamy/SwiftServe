@@ -10,13 +10,15 @@ class TriageService {
   static String get _geminiApiKey => dotenv.env['GEMINI_API_KEY'] ?? '';
   static const String _venueId = 'mockVenue123';
   
-  // Track ids to prevent infinite loops from duplicate stream events
+  // Track ids currently being computed (prevents re-entry during async)
   static final Set<String> _processingIds = {};
+  // Track ids already fully processed (prevents re-fire from stream update)
+  static final Set<String> _completedIds = {};
 
   static Future<void> processAlert(Alert alert) async {
-    // Only process RAW pending alerts that we aren't already computing
     if (alert.status != AlertStatus.pending) return;
     if (_processingIds.contains(alert.id)) return;
+    if (_completedIds.contains(alert.id)) return;  // already fully processed
     
     _processingIds.add(alert.id);
     print('[TriageService] Intercepted new SOS alert: ${alert.id}. Querying Gemini...');
@@ -135,7 +137,7 @@ Location: Room ${alert.roomNumber}, Floor ${alert.floor}
       alertIds: [alert.id],
       type: parsedType,
       severity: triageResult['severity'] as int? ?? 3,
-      affectedZone: 'Room ${alert.roomNumber} (Floor ${alert.floor})',
+      affectedZone: '${alert.roomNumber} (Floor ${alert.floor})',
       status: (triageResult['escalateToEmergencyServices'] == true) ? IncidentStatus.escalated : IncidentStatus.active,
       guestCount: 1,
       createdAt: timestamp,
@@ -147,7 +149,8 @@ Location: Room ${alert.roomNumber}, Floor ${alert.floor}
 
     await FirebaseDatabase.instance.ref('venues/$_venueId/incidents/$incidentId').set(incident.toMap());
     
-    // Memory cleanup
+    // Mark as permanently done so stream re-fires are ignored
+    _completedIds.add(alert.id);
     _processingIds.remove(alert.id);
   }
 }

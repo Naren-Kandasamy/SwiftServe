@@ -1,10 +1,7 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:firebase_database/firebase_database.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:shared/models/alert.dart';
 import 'package:shared/models/incident.dart';
+import 'package:shared/venue_config.dart';
 
 class VenueMap extends StatefulWidget {
   final List<Incident> incidents;
@@ -16,61 +13,14 @@ class VenueMap extends StatefulWidget {
 
 class _VenueMapState extends State<VenueMap> {
   final TransformationController _controller = TransformationController();
-  StreamSubscription<DatabaseEvent>? _floorPlanSub;
-  String? _floorPlanUrl;
-  bool _isUploading = false;
-  String _currentFloor = '1';
+  String _currentFloor = VenueConfig.floors.first;
 
-  @override
-  void initState() {
-    super.initState();
-    _loadFloorPlanUrl();
-  }
-
-  void _loadFloorPlanUrl() {
-    _floorPlanSub?.cancel();
-    _floorPlanSub = FirebaseDatabase.instance
-        .ref('venues/mockVenue123/floorPlanUrls/$_currentFloor')
-        .onValue
-        .listen((event) {
-      if (mounted && event.snapshot.value != null) {
-        setState(() => _floorPlanUrl = event.snapshot.value as String);
-      }
-    });
-  }
-
-  Future<void> _uploadFloorPlan() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-      allowMultiple: false,
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) return;
-
-    setState(() => _isUploading = true);
-    try {
-      final file = result.files.first;
-      final ref = FirebaseStorage.instance
-          .ref('venues/mockVenue123/floorplan_f$_currentFloor.${file.extension}');
-      await ref.putData(file.bytes!);
-      final url = await ref.getDownloadURL();
-      await FirebaseDatabase.instance
-          .ref('venues/mockVenue123/floorPlanUrls/$_currentFloor')
-          .set(url);
-    } catch (e) {
-      debugPrint('[VenueMap] Upload failed: $e');
-    } finally {
-      if (mounted) setState(() => _isUploading = false);
-    }
-  }
-
-  void _zoomIn() => _controller.value = _controller.value.scaled(1.2);
-  void _zoomOut() => _controller.value = _controller.value.scaled(0.83);
+  void _zoomIn() => _controller.value = Matrix4.identity()..scale(1.2);
+  void _zoomOut() => _controller.value = Matrix4.identity()..scale(0.83);
   void _resetZoom() => _controller.value = Matrix4.identity();
 
   @override
   void dispose() {
-    _floorPlanSub?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -92,26 +42,22 @@ class _VenueMapState extends State<VenueMap> {
               transformationController: _controller,
               minScale: 0.3,
               maxScale: 5.0,
-              child: SizedBox(
-                width: double.infinity,
-                height: double.infinity,
-                child: Stack(
-                  children: [
-                    // Floor plan background
-                    Positioned.fill(
-                      child: _floorPlanUrl != null
-                          ? Image.network(
-                              _floorPlanUrl!,
-                              fit: BoxFit.contain,
-                              errorBuilder: (_, __, ___) => _buildEmptyState(),
-                            )
-                          : _buildEmptyState(),
-                    ),
-                    // Live incident pins
-                    ..._renderIncidentPins(),
-                  ],
-                ),
-              ),
+              child: LayoutBuilder(builder: (context, constraints) {
+                final w = constraints.maxWidth;
+                final h = constraints.maxHeight;
+                return SizedBox(
+                  width: w,
+                  height: h,
+                  child: Stack(
+                    children: [
+                      // Hardcoded floor canvas grid + room labels
+                      Positioned.fill(child: _buildFloorCanvas(w, h)),
+                      // Live incident pins — all sharing the same (w, h)
+                      ..._renderIncidentPins(w, h),
+                    ],
+                  ),
+                );
+              }),
             ),
           ),
 
@@ -139,56 +85,17 @@ class _VenueMapState extends State<VenueMap> {
                   underline: const SizedBox(),
                   icon: const Icon(Icons.arrow_drop_down, color: Colors.blueAccent, size: 20),
                   style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 13),
-                  items: ['1', '2', '3', '4', '5']
+                  items: VenueConfig.floors
                       .map((f) => DropdownMenuItem(value: f, child: Text("Floor $f")))
                       .toList(),
                   onChanged: (val) {
                     if (val != null && val != _currentFloor) {
-                      setState(() {
-                        _currentFloor = val;
-                        _floorPlanUrl = null; // Clear brief flash
-                      });
-                      _loadFloorPlanUrl();
+                      setState(() => _currentFloor = val);
                       _resetZoom();
                     }
                   },
                 ),
                 const Spacer(),
-                if (_isUploading)
-                  const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                        color: Colors.blueAccent, strokeWidth: 2),
-                  )
-                else
-                  Tooltip(
-                    message: 'Upload floor plan image',
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(8),
-                      onTap: _uploadFloorPlan,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.blueAccent.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                              color: Colors.blueAccent.withValues(alpha: 0.4)),
-                        ),
-                        child: const Row(
-                          children: [
-                            Icon(Icons.upload_file,
-                                size: 14, color: Colors.blueAccent),
-                            SizedBox(width: 6),
-                            Text('Upload Plan',
-                                style: TextStyle(
-                                    color: Colors.blueAccent, fontSize: 12)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),
@@ -212,26 +119,35 @@ class _VenueMapState extends State<VenueMap> {
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.map_outlined, size: 64, color: Colors.white12),
-          const SizedBox(height: 12),
-          const Text('No floor plan uploaded',
-              style: TextStyle(color: Colors.white24, fontSize: 13)),
-          const SizedBox(height: 8),
-          TextButton.icon(
-            onPressed: _uploadFloorPlan,
-            icon: const Icon(Icons.upload_file,
-                size: 16, color: Colors.blueAccent),
-            label: const Text('Upload now',
-                style: TextStyle(color: Colors.blueAccent)),
-          ),
-        ],
+  Widget _buildFloorCanvas(double w, double h) {
+    final rooms = VenueConfig.roomsForFloor(_currentFloor);
+    return CustomPaint(
+      painter: _FloorGridPainter(),
+      child: Stack(
+        children: rooms.map((room) {
+          final (rx, ry) = VenueConfig.coordinateFor(_currentFloor, room);
+          return Positioned(
+            left: (rx * w - 24).clamp(0, w - 48),
+            top: (ry * h - 14).clamp(0, h - 28),
+            child: Opacity(
+              opacity: 0.35,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.blueGrey[800],
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(room, style: const TextStyle(color: Colors.white70, fontSize: 9, decoration: TextDecoration.none)),
+              ),
+            ),
+          );
+        }).toList(),
       ),
     );
+  }
+
+  Widget _buildEmptyState() {
+    return const Center(child: Text('No floor data', style: TextStyle(color: Colors.white24)));
   }
 
   Widget _mapControl(IconData icon, VoidCallback onTap, String heroTag) {
@@ -245,46 +161,65 @@ class _VenueMapState extends State<VenueMap> {
     );
   }
 
-  List<Widget> _renderIncidentPins() {
-    // Only show pins that mathematically reside exactly on the selected floor
-    final floorIncidents = widget.incidents.where((i) => i.affectedZone.contains('(Floor $_currentFloor)')).toList();
-    
+  List<Widget> _renderIncidentPins(double w, double h) {
+    final floorIncidents = widget.incidents
+        .where((i) => i.affectedZone.contains('(Floor $_currentFloor)'))
+        .toList();
+
     return floorIncidents.map((incident) {
-      final roomInt =
-          int.tryParse(incident.affectedZone.replaceAll(RegExp(r'[^0-9]'), '')) ??
-              101;
-      final double pseudoX = (roomInt * 17.5) % 600 + 80;
-      final double pseudoY = (roomInt * 23.3) % 380 + 80;
+      // Parse room name from "Room 206 (Floor 2)" → "Room 206"
+      final rawZone = incident.affectedZone.split(' (Floor').first.trim();
+      final (rx, ry) = VenueConfig.coordinateFor(_currentFloor, rawZone);
 
       Color severityColor;
       switch (incident.severity) {
-        case 5:
-          severityColor = Colors.red;
-          break;
-        case 4:
-          severityColor = Colors.orange;
-          break;
-        case 3:
-          severityColor = Colors.amber;
-          break;
-        case 2:
-          severityColor = Colors.lightBlueAccent;
-          break;
-        default:
-          severityColor = Colors.grey;
-          break;
+        case 5: severityColor = Colors.red; break;
+        case 4: severityColor = Colors.orange; break;
+        case 3: severityColor = Colors.amber; break;
+        case 2: severityColor = Colors.lightBlueAccent; break;
+        default: severityColor = Colors.grey; break;
       }
 
       return Positioned(
-        left: pseudoX,
-        top: pseudoY,
-        child: _HoverablePin(
-          incident: incident,
-          color: severityColor,
-        ),
+        left: (rx * w - 18).clamp(0, w - 36),
+        top: (ry * h - 36).clamp(0, h - 52),
+        child: _HoverablePin(incident: incident, color: severityColor),
       );
     }).toList();
   }
+}
+
+// ─── Floor Grid Canvas Painter ───────────────────────────────────────────────
+class _FloorGridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final bg = Paint()
+      ..color = const Color(0xFF1E2035)
+      ..style = PaintingStyle.fill;
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), bg);
+
+    final wall = Paint()
+      ..color = const Color(0xFF3E4060)
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke;
+    // Outer perimeter
+    canvas.drawRect(
+      Rect.fromLTWH(size.width * 0.04, size.height * 0.05, size.width * 0.92, size.height * 0.90),
+      wall,
+    );
+
+    final grid = Paint()
+      ..color = const Color(0xFF2A2C45)
+      ..strokeWidth = 0.8
+      ..style = PaintingStyle.stroke;
+    // Horizontal corridor
+    canvas.drawLine(Offset(size.width * 0.04, size.height * 0.50), Offset(size.width * 0.96, size.height * 0.50), grid);
+    // Vertical corridor
+    canvas.drawLine(Offset(size.width * 0.50, size.height * 0.05), Offset(size.width * 0.50, size.height * 0.95), grid);
+  }
+
+  @override
+  bool shouldRepaint(_) => false;
 }
 
 /// A stateful pin that reveals a detail tooltip card on hover.
