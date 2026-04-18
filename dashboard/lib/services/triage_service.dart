@@ -49,14 +49,23 @@ class TriageService {
     final prompt = '''
 You are an emergency triage AI for a hospitality venue.
 Classify the incoming guest SOS alert and return ONLY valid JSON.
-CRITICAL: If an image is provided alongside this text, inspect it thoroughly. If you detect ANY visual evidence of smoke, fire, weapons, significant blood, or structural collapse, aggressively boost the severity score to 4 or 5 and set escalateToEmergencyServices to true regardless of the guest's text description.
+CRITICAL: If an image is provided, inspect it thoroughly. If you detect smoke, fire, weapons, blood, or structural collapse, boost severity to 4 or 5 and set escalateToEmergencyServices to true.
+
+Severity scale — use the FULL range 1–5:
+1 = Minor nuisance. No danger. (e.g. noisy neighbour, lost key, dripping tap, mild headache)
+2 = Low concern. Monitoring only. (e.g. small cut needing first aid, suspicious person seen briefly, flickering lights)
+3 = Active incident. Staff response needed. (e.g. moderate injury, small fire in bin, security dispute, power outage affecting a room)
+4 = Serious emergency. Emergency services likely needed. (e.g. cardiac arrest, large fire, assault, structural damage)
+5 = Mass casualty / catastrophic. Emergency services required immediately. (e.g. explosion, mass stabbing, building collapse, gas leak with fire)
+
+Default to 1 or 2 for vague or low-risk descriptions. Only go to 3+ when there is clear immediate danger.
 
 Output format:
 {
   "type": "fire" | "medical" | "security" | "infrastructure" | "other",
   "severity": <integer 1-5>,
-  "immediateInstructions": "<Provide highly detailed, 3-4 sentence step-by-step safety instructions specifically addressing the exact crisis described>",
-  "escalateToEmergencyServices": <boolean, ONLY set to true if the situation requires immediate mass-evacuation or heavily armed response. Default to false for standard medical, fire, or security incidents that venue staff can respond to first.>
+  "immediateInstructions": "<3-4 sentence safety instruction tailored to the exact situation>",
+  "escalateToEmergencyServices": <boolean>
 }
 
 Guest SOS Message: "${alert.description}"

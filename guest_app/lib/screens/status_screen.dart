@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:shared/models/alert.dart';
 import 'package:shared/models/incident.dart';
+import 'sos_screen.dart';
 
 class StatusScreen extends StatefulWidget {
   final String alertId;
@@ -77,7 +78,13 @@ class _StatusScreenState extends State<StatusScreen> {
       appBar: AppBar(
         title: const Text('Emergency Status', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
         backgroundColor: Colors.red[900],
-        automaticallyImplyLeading: false, // Prevent back navigation to SOS
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          tooltip: 'Return to SOS screen',
+          onPressed: () => Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const SosScreen()),
+          ),
+        ),
       ),
       body: SafeArea(
         child: Column(

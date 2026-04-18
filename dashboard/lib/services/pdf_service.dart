@@ -1,12 +1,14 @@
-import 'dart:typed_data';
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:html' as html;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 import 'package:shared/models/incident.dart';
 import 'package:intl/intl.dart';
 
 class PdfService {
-  static Future<void> generateBrief(Incident incident) async {
+  /// Generates an in-memory PDF, creates a browser blob URL, and opens it in
+  /// a new tab. Returns the URL so the caller can offer a "Copy Link" action.
+  static Future<String> generateBriefUrl(Incident incident) async {
     final doc = pw.Document();
 
     final formatter = DateFormat('MMM dd, yyyy - HH:mm:ss');
@@ -173,10 +175,17 @@ class PdfService {
       )
     );
 
-    await Printing.layoutPdf(
-      onLayout: (PdfPageFormat format) async => doc.save(),
-      name: 'Responder_Brief_${incident.id}.pdf',
-    );
+    final pdfBytes = await doc.save();
+
+    // Create an in-memory blob URL — no server needed, no popup-block risk.
+    final blob = html.Blob([pdfBytes], 'application/pdf');
+    final url = html.Url.createObjectUrl(blob);
+
+    // Open the PDF in a new tab immediately
+    html.window.open(url, '_blank');
+
+    // Return URL so the caller can offer a "Copy Link" SnackBar action
+    return url;
   }
 
   static pw.Widget _buildInfoCard(String title, String value, {PdfColor? textColor}) {

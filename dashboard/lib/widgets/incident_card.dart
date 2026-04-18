@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:html' as html;
 import 'package:shared/models/incident.dart';
 import 'package:shared/models/alert.dart';
 import '../services/pdf_service.dart';
 
-class IncidentCard extends StatelessWidget {
+class IncidentCard extends StatefulWidget {
   final Incident incidentData;
   final VoidCallback onAssign;
   final VoidCallback onEscalate;
@@ -14,6 +16,13 @@ class IncidentCard extends StatelessWidget {
     required this.onAssign,
     required this.onEscalate,
   });
+
+  @override
+  State<IncidentCard> createState() => _IncidentCardState();
+}
+
+class _IncidentCardState extends State<IncidentCard> {
+  bool _isGenerating = false;
 
   Color _getSeverityColor(int severity) {
     switch (severity) {
@@ -38,16 +47,16 @@ class IncidentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String title = 'Emergency: ${incidentData.type.name.toUpperCase()}';
-    final String roomNumber = incidentData.affectedZone;
-    final EmergencyType type = incidentData.type;
-    final int severity = incidentData.severity;
-    final DateTime timeObj = DateTime.fromMillisecondsSinceEpoch(incidentData.createdAt);
+    final String title = 'Emergency: ${widget.incidentData.type.name.toUpperCase()}';
+    final String roomNumber = widget.incidentData.affectedZone;
+    final EmergencyType type = widget.incidentData.type;
+    final int severity = widget.incidentData.severity;
+    final DateTime timeObj = DateTime.fromMillisecondsSinceEpoch(widget.incidentData.createdAt);
     final String time = '${timeObj.hour}:${timeObj.minute.toString().padLeft(2, '0')}';
     
     // Derive assigned string from the timeline updates if any exist containing 'Assigned'
-    final String? assigned = incidentData.timeline.where((t) => t.updateText.contains('Assigned')).map((t) => t.updateText.replaceFirst('Assigned to ', '')).lastOrNull;
-    final bool escalated = incidentData.status == IncidentStatus.escalated;
+    final String? assigned = widget.incidentData.timeline.where((t) => t.updateText.contains('Assigned')).map((t) => t.updateText.replaceFirst('Assigned to ', '')).lastOrNull;
+    final bool escalated = widget.incidentData.status == IncidentStatus.escalated;
     
     final severityColor = _getSeverityColor(severity);
     
@@ -139,51 +148,92 @@ class IncidentCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 TextButton.icon(
-                  onPressed: () => PdfService.generateBrief(incidentData),
-                  icon: const Icon(Icons.picture_as_pdf, color: Colors.blueAccent, size: 16),
-                  label: const Text('Brief', style: TextStyle(color: Colors.blueAccent)),
+                  onPressed: _isGenerating ? null : () async {
+                    setState(() => _isGenerating = true);
+                    try {
+                      final url = await PdfService.generateBriefUrl(widget.incidentData);
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          backgroundColor: Colors.green[800],
+                          duration: const Duration(seconds: 8),
+                          content: const Row(
+                            children: [
+                              Icon(Icons.check_circle, color: Colors.white, size: 18),
+                              SizedBox(width: 8),
+                              Expanded(child: Text('Responder Brief ready! Opening now...', style: TextStyle(color: Colors.white))),
+                            ],
+                          ),
+                          action: SnackBarAction(
+                            label: 'Copy Link',
+                            textColor: Colors.greenAccent,
+                            onPressed: () {
+                              html.window.navigator.clipboard?.writeText(url);
+                            },
+                          ),
+                        ),
+                      );
+                    } catch (e) {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          backgroundColor: Colors.red[900],
+                          content: Text('Brief failed: ${e.toString().split('\n').first}', style: const TextStyle(color: Colors.white)),
+                        ),
+                      );
+                    } finally {
+                      if (mounted) setState(() => _isGenerating = false);
+                    }
+                  },
+                  icon: _isGenerating
+                    ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.blueAccent))
+                    : const Icon(Icons.picture_as_pdf, color: Colors.blueAccent, size: 16),
+                  label: Text(_isGenerating ? 'Generating...' : 'Brief', style: const TextStyle(color: Colors.blueAccent)),
                   style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
                 ),
                 
-                if (assigned != null)
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: Colors.green.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.green.withValues(alpha: 0.5)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.check_circle, color: Colors.green, size: 14),
-                        const SizedBox(width: 4),
-                        Text('Assigned to: $assigned', style: const TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                  )
-                else
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
+                // Right side: assignment + escalate
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (assigned != null) ...[
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.green.withValues(alpha: 0.5)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.check_circle, color: Colors.green, size: 14),
+                            const SizedBox(width: 4),
+                            Text(assigned, style: const TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                    ] else ...[
                       TextButton(
-                        onPressed: onAssign,
+                        onPressed: widget.onAssign,
                         style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
                         child: const Text('Assign', style: TextStyle(color: Colors.lightBlue)),
                       ),
                       const SizedBox(width: 4),
-                      ElevatedButton(
-                        onPressed: escalated ? null : onEscalate,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red[900],
-                          foregroundColor: Colors.white,
-                          disabledBackgroundColor: Colors.grey[800],
-                          disabledForegroundColor: Colors.white30,
-                          visualDensity: VisualDensity.compact,
-                        ),
-                        child: Text(escalated ? 'Escalated' : 'Escalate'),
-                      ),
                     ],
-                  )
+                    ElevatedButton(
+                      onPressed: escalated ? null : widget.onEscalate,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red[900],
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor: Colors.grey[800],
+                        disabledForegroundColor: Colors.white30,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      child: Text(escalated ? 'Escalated' : 'Escalate'),
+                    ),
+                  ],
+                ),
               ],
             )
           ],
