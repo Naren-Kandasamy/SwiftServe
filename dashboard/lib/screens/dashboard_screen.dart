@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:html' as html;
 import 'package:firebase_database/firebase_database.dart';
 import 'package:shared/models/alert.dart';
 import 'package:shared/models/incident.dart';
@@ -32,8 +34,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
+    _requestNotificationPermission();
     _subscribeToIncidents();
     _subscribeToAlerts();
+  }
+
+  void _requestNotificationPermission() {
+    try {
+      if (html.Notification.permission != 'granted') {
+        html.Notification.requestPermission();
+      }
+    } catch (_) {}
   }
 
   // ─── Firebase Listeners ────────────────────────────────────────────────────

@@ -1,4 +1,6 @@
 import 'dart:convert';
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:html' as html;
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
@@ -182,6 +184,17 @@ Location: Room ${alert.roomNumber}, Floor ${alert.floor}
 
     await FirebaseDatabase.instance.ref('venues/$_venueId/incidents/$incidentId').set(incident.toMap());
     
+    // Wake up background staff running the web dashboard via native push
+    try {
+      if (html.Notification.permission == 'granted') {
+        html.Notification(
+          '🚨 NEW ALERT: ${parsedType.name.toUpperCase()} (Severity ${triageResult['severity']})',
+          body: 'Room ${alert.roomNumber}: ${alert.description}',
+          icon: '/favicon.png', // Or similar absolute asset path
+        );
+      }
+    } catch (_) {}
+
     // Mark as permanently done so stream re-fires are ignored
     _completedIds.add(alert.id);
     _processingIds.remove(alert.id);

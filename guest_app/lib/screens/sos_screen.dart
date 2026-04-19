@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:uuid/uuid.dart';
 import 'package:shared/models/alert.dart';
 import 'package:flutter/services.dart';
@@ -740,7 +741,7 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
 
       final alert = Alert(
         id: alertId,
-        userId: 'mockUser99', // TODO: Firebase Auth UID
+        userId: FirebaseAuth.instance.currentUser?.uid ?? 'offline_user', // True Auth UUID
         venueId: 'mockVenue123',
         roomNumber: _selectedRoom,
         floor: int.tryParse(_selectedFloor) ?? 1,

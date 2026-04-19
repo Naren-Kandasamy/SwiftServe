@@ -34,7 +34,7 @@ All AI, backend, and infrastructure must use Google technologies as mandated by 
 | Primary AI | **Gemini 2.5 Flash (via Google AI Studio Developer API)** | Emergency classification, severity scoring, instruction generation. Called directly from Dashboard Dart code. |
 | On-device AI | Gemini Nano (Android) | Offline classification fallback — planned, not yet implemented |
 | Voice transcription | **`speech_to_text` Flutter package (native OS engine)** | Streams real-time transcription; uses Chrome Web Speech API on web, Siri on iOS, Google on Android — **zero cost, no API key required** |
-| Image analysis | Google Cloud Vision API | Planned — not yet implemented |
+| Image analysis | ~~Google Cloud Vision API~~ | **Deprecated** — AI Triage handles image analysis directly via Gemini Flash Multimodal in the dashboard. |
 | Translation | Google Cloud Translation API | Planned — not yet implemented |
 | Maps | Google Maps SDK (Flutter + JS) | Venue floor plan overlay, incident pinning (partial implementation) |
 | Offline knowledge | Curated HTML assets | Planned — not yet implemented |
@@ -73,7 +73,9 @@ The guest-facing mobile application. UI is minimal by design — a person in a c
 lib/screens/sos_screen.dart          — main SOS UI
 lib/screens/status_screen.dart       — post-alert status feed
 lib/screens/checkin_screen.dart      — QR check-in flow
-lib/services/ble_service.dart        — BLE mesh advertising + scanning
+lib/screens/knowledge_library_screen.dart — UI Grid for the full offline emergency directory
+lib/services/ble_service.dart        — BLE mesh advertising
+lib/services/ble_scanner_service.dart— BLE mesh scanning and relay
 lib/services/sms_fallback.dart       — SMS offline fallback
 lib/services/speech_service.dart     — Speech-to-Text integration
 lib/services/connectivity_service.dart — tier detection and mode switching
@@ -159,9 +161,8 @@ Owns the Firebase data architecture, security rules, shared data models, and the
 - Design and maintain the full Firebase Realtime Database schema
 - Write and maintain Firebase security rules (guests can only write alerts, staff can read/update)
 - Define all shared data model classes in `lib/models/` — these are read-only for all other agents
-- Build the responder brief generation pipeline and dynamic link system
 - Maintain the venue configuration system (floor plans, staff roster, room counts)
-- Own the `functions/src/index.js` routing file — defines which Cloud Functions are triggered by what
+- Build the responder brief generation pipeline client-side directly within `dashboard/lib/services/pdf_service.dart`
 
 **Key files:**
 ```
@@ -170,7 +171,7 @@ lib/models/incident.dart           — Incident data model
 lib/models/user.dart               — User + role model
 lib/models/venue.dart              — Venue + floor plan model
 lib/services/firebase_service.dart — Firebase read/write helpers (shared)
-functions/src/index.js             — Cloud Function trigger routing
+dashboard/lib/services/pdf_service.dart — Fully native PDF Brief generation
 database.rules.json                — Realtime DB security rules
 firestore.rules                    — Firestore security rules
 docs/responder_brief_template.md   — Brief format template
@@ -413,13 +414,14 @@ Additional visual context: {imageAnalysisResult or "none"}
 ### Gemini Nano — offline fallback
 Gemini Nano is accessed via the Android ML Kit / AICore API. It handles basic classification only — type and severity. Instruction generation falls back to pre-written templates keyed by emergency type when Nano is the only available model.
 
-### Cloud Vision API — image analysis pipeline
-1. Guest attaches photo in SOS screen
-2. Image uploaded to Firebase Storage, URL stored in alert
-3. Cloud Function calls Cloud Vision with: LABEL_DETECTION, OBJECT_LOCALIZATION, SAFE_SEARCH_DETECTION
-4. Relevant labels (smoke, fire, blood, person, weapon, flood, structural damage) extracted
-5. Labels passed to Gemini as `imageAnalysisResult` in the classification prompt
-6. Gemini interprets visual context to inform type and severity scoring
+### Gemini Native Multimodal — Image Analysis Pipeline
+> **Architecture Delta:** We abandoned Cloud Vision API entirely in favor of sending the attached image strictly as a `DataPart` directly into the Gemini 2.5 Flash classifier natively. This vastly simplified architecture and reduced latency.
+
+1. Guest attaches photo in SOS screen (compressed natively using `maxWidth` and `imageQuality`)
+2. Image uploaded to Firebase Storage, URL stored in alert `imageUrl`
+3. Dashboard app's `TriageService` securely downloads the image stream via `FirebaseStorage.instance.refFromURL().getData()`
+4. Image bytecode bound strictly to the `prompt` payload
+5. Gemini independently determines labels, severity, and visual context entirely off the raw byte stream
 
 ---
 
@@ -442,12 +444,12 @@ Shared files in `lib/models/` and `lib/services/firebase_service.dart` are owned
 | `lib/widgets/incident_card.dart` | M2 | Incident card component |
 | `lib/widgets/venue_map.dart` | M2 | Google Maps overlay |
 | `lib/services/task_service.dart` | M2 | Task assignment logic |
-| `functions/src/classifyAlert.js` | M3 | Gemini triage |
-| `functions/src/generateInstructions.js` | M3 | Instruction generation |
-| `functions/src/analyseImage.js` | M3 | Cloud Vision pipeline |
+| `dashboard/lib/services/pdf_service.dart` | M4 | Client-side Responder Brief Generator |
+| `functions/src/classifyAlert.js` | M3 | **Deprecated** due to serverless TriageService |
+| `functions/src/generateInstructions.js`| M3 | **Deprecated** |
+| `functions/src/analyseImage.js` | M3 | **Deprecated** due to native Multimodal |
 | `functions/src/detectEscalation.js` | M3 | Pattern detection |
 | `functions/src/prompts/` | M3 | All Gemini prompt templates |
-| `functions/src/index.js` | M4 | Function routing only |
 | `database.rules.json` | M4 | Firebase security rules |
 | `assets/knowledge/` | M3 (content) | HTML knowledge pages |
 
@@ -471,8 +473,8 @@ Staff messages and status updates are written to `/venues/{venueId}/messages/{in
 M1's status screen subscribes to this path and renders updates in the guest's feed.
 
 **Contract 4 — Responder brief generation (M2 triggers → M4 generates)**
-M2's "Escalate to 911" button calls the `generateResponderBrief` Cloud Function with the incidentId.
-M4's function assembles the brief and returns a public URL which M2 displays and copies to clipboard.
+M2's "Escalate to 911" button calls the `PdfService.generateBriefUrl()` method inside the dashboard context with the incidentId.
+M4's package natively builds the visual PDF and spawns a temporary Web Blob URL which the staff manually shares or downloads.
 
 **Contract 5 — BLE to Firebase sync (M1 offline → M4 schema)**
 When BLE-received alerts are synced to Firebase on reconnect, M1 must write the full Alert object using M4's schema with the original offline timestamp, not the sync timestamp.

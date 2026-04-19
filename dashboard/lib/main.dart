@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'firebase_options.dart';
 import 'screens/dashboard_screen.dart';
@@ -11,6 +12,8 @@ void main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     ).timeout(const Duration(seconds: 5));
+
+    await FirebaseAuth.instance.signInAnonymously();
   } catch (e) {
     debugPrint('[Offline Mode] Firebase init failed or timed out on Dashboard: $e');
   }

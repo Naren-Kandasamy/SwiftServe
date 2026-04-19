@@ -4,6 +4,7 @@ import 'dart:html' as html;
 import 'package:shared/models/incident.dart';
 import 'package:shared/models/alert.dart';
 import '../services/pdf_service.dart';
+import 'incident_chat_dialog.dart';
 
 class IncidentCard extends StatefulWidget {
   final Incident incidentData;
@@ -144,8 +145,10 @@ class _IncidentCardState extends State<IncidentCard> {
             // Action Buttons
             const SizedBox(height: 12),
             const Divider(color: Colors.white12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              spacing: 8.0,
+              runSpacing: 8.0,
               children: [
                 TextButton.icon(
                   onPressed: _isGenerating ? null : () async {
@@ -189,6 +192,18 @@ class _IncidentCardState extends State<IncidentCard> {
                     ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.blueAccent))
                     : const Icon(Icons.picture_as_pdf, color: Colors.blueAccent, size: 16),
                   label: Text(_isGenerating ? 'Generating...' : 'Brief', style: const TextStyle(color: Colors.blueAccent)),
+                  style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
+                ),
+                
+                TextButton.icon(
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (context) => IncidentChatDialog(incident: widget.incidentData),
+                    );
+                  },
+                  icon: const Icon(Icons.chat, color: Colors.greenAccent, size: 16),
+                  label: const Text('Chat', style: TextStyle(color: Colors.greenAccent)),
                   style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
                 ),
                 
