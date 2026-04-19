@@ -542,7 +542,7 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOutCubic,
-          width: MediaQuery.of(context).size.width * 0.28,
+          width: (MediaQuery.of(context).size.width * 0.28).clamp(80.0, 110.0),
           height: 105,
           decoration: BoxDecoration(
             gradient: isSelected 
@@ -746,7 +746,7 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
         roomNumber: _selectedRoom,
         floor: int.tryParse(_selectedFloor) ?? 1,
         description: _descController.text,
-        imageUrl: null, // Written immediately — image patches in below
+        imageUrl: _attachedImage != null ? 'pending_upload' : null, // Written immediately — image patches in below
         type: parsedType,
         location: const GeoPoint(0.0, 0.0), // TODO: GPS
         timestamp: DateTime.now().millisecondsSinceEpoch,
@@ -770,22 +770,20 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
         );
 
         // Background image upload — fires AFTER navigation so guest isn't blocked
-        // TriageService waits up to 10s for imageUrl to appear before calling Gemini
+        // TriageService polls up to 6s for imageUrl to appear before calling Gemini
         if (_attachedImage != null) {
           Future(() async {
             try {
-              final ref = FirebaseStorage.instance
-                  .ref('venues/mockVenue123/alerts/images/$alertId');
-              await ref.putData(await _attachedImage!.readAsBytes())
-                  .timeout(const Duration(seconds: 30));
-              final url = await ref.getDownloadURL()
-                  .timeout(const Duration(seconds: 10));
+              final bytes = await _attachedImage!.readAsBytes();
+              final base64String = base64Encode(bytes);
+              final String dataUrl = 'data:image/jpeg;base64,$base64String';
+              
               await FirebaseDatabase.instance
                   .ref('venues/${alert.venueId}/alerts/$alertId')
-                  .update({'imageUrl': url});
-              debugPrint('[SosScreen] Image uploaded + patched into alert: $alertId');
+                  .update({'imageUrl': dataUrl});
+              debugPrint('[SosScreen] Base64 Image converted + patched into alert: $alertId');
             } catch (e) {
-              debugPrint('[SosScreen] Background image upload failed (non-fatal): $e');
+              debugPrint('[SosScreen] Background base64 image encoding failed (non-fatal): $e');
             }
           });
         }

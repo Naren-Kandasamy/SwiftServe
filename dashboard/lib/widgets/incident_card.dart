@@ -10,12 +10,14 @@ class IncidentCard extends StatefulWidget {
   final Incident incidentData;
   final VoidCallback onAssign;
   final VoidCallback onEscalate;
+  final VoidCallback onResolve;
 
   const IncidentCard({
     super.key,
     required this.incidentData,
     required this.onAssign,
     required this.onEscalate,
+    required this.onResolve,
   });
 
   @override
@@ -157,25 +159,36 @@ class _IncidentCardState extends State<IncidentCard> {
                       final url = await PdfService.generateBriefUrl(widget.incidentData);
                       if (!mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          backgroundColor: Colors.green[800],
-                          duration: const Duration(seconds: 8),
-                          content: const Row(
-                            children: [
-                              Icon(Icons.check_circle, color: Colors.white, size: 18),
-                              SizedBox(width: 8),
-                              Expanded(child: Text('Responder Brief ready! Opening now...', style: TextStyle(color: Colors.white))),
-                            ],
-                          ),
-                          action: SnackBarAction(
-                            label: 'Copy Link',
-                            textColor: Colors.greenAccent,
-                            onPressed: () {
-                              html.window.navigator.clipboard?.writeText(url);
-                            },
-                          ),
-                        ),
-                      );
+  SnackBar(
+    behavior: SnackBarBehavior.floating,
+    margin: EdgeInsets.only(bottom: MediaQuery.of(context).size.height - 150, left: 16, right: 16),
+    elevation: 10,
+    backgroundColor: Colors.green[800],
+    duration: const Duration(seconds: 6),
+    content: Row(
+      children: [
+        const Icon(Icons.check_circle, color: Colors.white, size: 18),
+        const SizedBox(width: 8),
+        const Expanded(child: Text('Responder Brief ready!', style: TextStyle(color: Colors.white))),
+        TextButton(
+          onPressed: () {
+            html.window.navigator.clipboard?.writeText(url);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Link copied to clipboard')),
+            );
+          },
+          child: const Text('COPY', style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold)),
+        ),
+        IconButton(
+          icon: const Icon(Icons.close, color: Colors.white70, size: 18),
+          onPressed: () {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          },
+        ),
+      ],
+    ),
+  ),
+);
                     } catch (e) {
                       if (!mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -207,34 +220,35 @@ class _IncidentCardState extends State<IncidentCard> {
                   style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
                 ),
                 
-                // Right side: assignment + escalate
-                Row(
-                  mainAxisSize: MainAxisSize.min,
+                // Right side: assignment + escalate + resolve
+                Wrap(
+                  spacing: 6.0,
+                  runSpacing: 4.0,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     if (assigned != null) ...[
                       Container(
-                        padding: const EdgeInsets.all(6),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: Colors.green.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: Colors.green.withValues(alpha: 0.5)),
                         ),
                         child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             const Icon(Icons.check_circle, color: Colors.green, size: 14),
                             const SizedBox(width: 4),
-                            Text(assigned, style: const TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold)),
+                            Text(assigned, style: const TextStyle(color: Colors.green, fontSize: 11, fontWeight: FontWeight.bold)),
                           ],
                         ),
                       ),
-                      const SizedBox(width: 6),
                     ] else ...[
                       TextButton(
                         onPressed: widget.onAssign,
                         style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
-                        child: const Text('Assign', style: TextStyle(color: Colors.lightBlue)),
+                        child: const Text('Assign', style: TextStyle(color: Colors.lightBlue, fontSize: 13)),
                       ),
-                      const SizedBox(width: 4),
                     ],
                     ElevatedButton(
                       onPressed: escalated ? null : widget.onEscalate,
@@ -244,8 +258,21 @@ class _IncidentCardState extends State<IncidentCard> {
                         disabledBackgroundColor: Colors.grey[800],
                         disabledForegroundColor: Colors.white30,
                         visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        textStyle: const TextStyle(fontSize: 12),
                       ),
                       child: Text(escalated ? 'Escalated' : 'Escalate'),
+                    ),
+                    ElevatedButton(
+                      onPressed: widget.onResolve,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green[700],
+                        foregroundColor: Colors.white,
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        textStyle: const TextStyle(fontSize: 12),
+                      ),
+                      child: const Text('Resolve'),
                     ),
                   ],
                 ),

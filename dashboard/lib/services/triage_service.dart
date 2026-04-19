@@ -74,10 +74,36 @@ Guest SOS Message: "${alert.description}"
 Location: Room ${alert.roomNumber}, Floor ${alert.floor}
 ''';
 
+    // Provide curated fallback advice immediately
+    String curatedAdvice = "Help is on the way. Please stay calm.";
+    int curatedSeverity = 3;
+    switch (alert.type ?? EmergencyType.other) {
+      case EmergencyType.fire:
+        curatedAdvice = "Activate the nearest fire alarm and evacuate via the stairs immediately. Do NOT use elevators. Check doors for heat before opening.";
+        curatedSeverity = 5;
+        break;
+      case EmergencyType.medical:
+        curatedAdvice = "Do not move the patient unless they are in immediate danger. Clear the area for paramedics. If trained, apply firm pressure to any bleeding.";
+        curatedSeverity = 4;
+        break;
+      case EmergencyType.security:
+        curatedAdvice = "Lock and barricade doors if unsafe to leave. Do not confront the individual. Silence your device and stay entirely out of sight.";
+        curatedSeverity = 4;
+        break;
+      case EmergencyType.infrastructure:
+        curatedAdvice = "Stay away from exposed wires or structural damage. Do not attempt to fix anything. Await maintenance staff.";
+        curatedSeverity = 2;
+        break;
+      case EmergencyType.other:
+        curatedAdvice = "Help is on the way. Please distance yourself from any hazard and wait for staff updates.";
+        curatedSeverity = 2;
+        break;
+    }
+
     Map<String, dynamic> triageResult = {
       "type": alert.type?.name ?? "other",
-      "severity": 3,
-      "immediateInstructions": "Help is on the way. Please stay calm.",
+      "severity": curatedSeverity,
+      "immediateInstructions": curatedAdvice,
       "escalateToEmergencyServices": false
     };
 
@@ -87,16 +113,16 @@ Location: Room ${alert.roomNumber}, Floor ${alert.floor}
 
     String? resolvedImageUrl = alert.imageUrl;
 
-    // If imageUrl wasn't present when the alert first arrived (background upload still in progress),
-    // poll Firebase for up to 30 seconds to give the guest app time to patch it in.
-    if (resolvedImageUrl == null) {
-      print('[TriageService] imageUrl is null — waiting up to 30s for background upload...');
-      for (int wait = 0; wait < 15; wait++) {
+    // If imageUrl was marked 'pending_upload',
+    // poll Firebase for only up to 6 seconds since we use fast Base64 updates now.
+    if (resolvedImageUrl == 'pending_upload') {
+      print('[TriageService] imageUrl is pending — waiting up to 6s for background upload...');
+      for (int wait = 0; wait < 3; wait++) {
         await Future.delayed(const Duration(seconds: 2));
         final snap = await FirebaseDatabase.instance
             .ref('venues/$_venueId/alerts/${alert.id}/imageUrl')
             .get();
-        if (snap.value != null && snap.value.toString().isNotEmpty) {
+        if (snap.value != null && snap.value.toString() != 'pending_upload') {
           resolvedImageUrl = snap.value as String?;
           print('[TriageService] imageUrl arrived after ${(wait + 1) * 2}s: $resolvedImageUrl');
           break;
@@ -104,20 +130,33 @@ Location: Room ${alert.roomNumber}, Floor ${alert.floor}
       }
     }
 
+    if (resolvedImageUrl == 'pending_upload') resolvedImageUrl = null; // timed out
+
+
     if (model != null) {
       List<Part> parts = [TextPart(prompt)];
 
       if (resolvedImageUrl != null && resolvedImageUrl.isNotEmpty) {
         try {
           print('[TriageService] Fetching SOS image for multimodal triage...');
-          final ref = FirebaseStorage.instance.refFromURL(resolvedImageUrl);
-          final imageBytes = await ref.getData(10 * 1024 * 1024); // 10MB limit
-          if (imageBytes != null) {
+          
+          if (resolvedImageUrl.startsWith('data:image')) {
+            print('[TriageService] Detected Base64 image. Decoding inline...');
+            // extract base64 payload
+            final base64String = resolvedImageUrl.split(',').last;
+            final imageBytes = base64Decode(base64String);
             parts.add(DataPart('image/jpeg', imageBytes));
-            print('[TriageService] Image (${imageBytes.length} bytes) streamed into Gemini context.');
+            print('[TriageService] Base64 Image (${imageBytes.length} bytes) streamed into Gemini context.');
+          } else {
+            final ref = FirebaseStorage.instance.refFromURL(resolvedImageUrl);
+            final imageBytes = await ref.getData(10 * 1024 * 1024); // 10MB limit
+            if (imageBytes != null) {
+              parts.add(DataPart('image/jpeg', imageBytes));
+              print('[TriageService] Firebase Storage Image (${imageBytes.length} bytes) streamed into Gemini context.');
+            }
           }
         } catch(e) {
-          print('[TriageService] Could not fetch image for multimodal (skipping): $e');
+          print('[TriageService] Could not parse image for multimodal (skipping): $e');
         }
       }
 
@@ -142,10 +181,11 @@ Location: Room ${alert.roomNumber}, Floor ${alert.floor}
       }
       
       if (!success) {
-        triageResult['immediateInstructions'] = 'AI Exception: $lastError\n\nHelp is still on the way.';
+        triageResult['immediateInstructions'] = 'AI Exception: $lastError\n\n$curatedAdvice';
       }
     } else {
-      print('[TriageService] API key not found. Using fallback placeholder classification.');
+      print('[TriageService] API key not found. Using high-quality curated fallback classification.');
+      // Keep the curated triageResult established at the top.
     }
 
     // 1. Update the original Alert with AI guidance
