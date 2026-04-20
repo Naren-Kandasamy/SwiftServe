@@ -7,6 +7,7 @@ import 'package:shared/models/incident.dart';
 import '../services/triage_service.dart';
 import '../widgets/incident_card.dart';
 import '../widgets/venue_map.dart';
+import 'analytics_screen.dart';
 
 // -----------------------------------------------------------------------------
 // DashboardScreen — CrisisNet Staff Command View
@@ -250,6 +251,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
             const SizedBox(width: 16),
+            IconButton(
+              icon: const Icon(Icons.analytics, color: Colors.blueAccent),
+              tooltip: 'View Performance Analytics',
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AnalyticsScreen()),
+              ),
+            ),
+            const SizedBox(width: 8),
             IconButton(
               icon: const Icon(Icons.delete_forever, color: Colors.redAccent),
               tooltip: 'Clear Database',
