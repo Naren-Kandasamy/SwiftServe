@@ -4,37 +4,73 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Burn Treatment</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #121212; color: #fff; line-height: 1.6; padding: 20px; }
-        h1 { color: #ff9800; font-size: 28px; border-bottom: 2px solid #ff9800; padding-bottom: 10px; }
-        h2 { color: #ffb74d; font-size: 20px; margin-top: 24px; }
-        ul { list-style-type: none; padding: 0; }
-        li { background: #1e1e1e; margin-bottom: 12px; padding: 16px; border-left: 4px solid #ff9800; border-radius: 4px; }
-        .danger { background-color: rgba(255,0,0,0.1); border: 1px solid #ff5252; padding: 15px; border-radius: 8px; color: #ff5252; font-weight: bold; }
-    </style>
+    
+    <link rel="stylesheet" href="css/style.css">
+    <script src="js/translations.js"></script>
+    <script src="js/app.js"></script>
 </head>
 <body>
-    <h1>🔥 Thermal Burns</h1>
+    <h1 data-i18n="burns_title">🔥 Thermal Burns</h1>
+    <div style="text-align: center; margin: 20px 0;">
+        <img src="img/burns.png" style="width:100%; max-width: 400px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+    </div>
     
-    <div class="danger">Never apply ice, butter, or ointments to a severe burn.</div>
+    
+    <div class="danger" data-i18n="burns_danger1">Never apply ice, butter, or ointments to a severe burn.</div>
 
-    <h2>1. Stop the Burning Process</h2>
+    <h2 data-i18n="burns_h2_1">1. Stop the Burning Process</h2>
     <ul>
-        <li>Remove the person from the heat source immediately.</li>
-        <li>If their clothing is on fire, have them STOP, DROP, and ROLL.</li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text" data-i18n="burns_step1">Remove the person from the heat source immediately.</div>
+    </li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text" data-i18n="burns_step2">If their clothing is on fire, have them STOP, DROP, and ROLL.</div>
+    </li>
     </ul>
 
-    <h2>2. Cool the Burn</h2>
+    <h2 data-i18n="burns_h2_2">2. Cool the Burn</h2>
     <ul>
-        <li>Hold the burned area under cool (not cold) running water or apply a cool, wet compress for 10 to 15 minutes.</li>
-        <li>Do NOT use ice. It can cause further tissue damage.</li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text" data-i18n="burns_step3">Hold the burned area under cool (not cold) running water or apply a cool, wet compress for 10 to 15 minutes.</div>
+    </li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text" data-i18n="burns_step4">Do NOT use ice. It can cause further tissue damage.</div>
+    </li>
     </ul>
 
-    <h2>3. Protect the Burn</h2>
+    <h2 data-i18n="burns_h2_3">3. Protect the Burn</h2>
     <ul>
-        <li>Remove rings or other tight items from the burned area quickly and gently, before it swells.</li>
-        <li>Cover the burn loosely with a sterile, non-fluffy bandage or clean cloth.</li>
-        <li>Do not break blisters.</li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text" data-i18n="burns_step5">Remove rings or other tight items from the burned area quickly and gently, before it swells.</div>
+    </li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text" data-i18n="burns_step6">Cover the burn loosely with a sterile, non-fluffy bandage or clean cloth.</div>
+    </li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text" data-i18n="burns_step7">Do not break blisters.</div>
+    </li>
     </ul>
+    <button id="fab-tts"></button>
 </body>
 </html>

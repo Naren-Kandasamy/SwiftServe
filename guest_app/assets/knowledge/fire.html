@@ -4,38 +4,82 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fire Emergency Guide</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #121212; color: #fff; line-height: 1.6; padding: 20px; }
-        h1 { color: #ff5722; font-size: 28px; border-bottom: 2px solid #ff5722; padding-bottom: 10px; }
-        h2 { color: #ff8a65; font-size: 20px; margin-top: 24px; }
-        ul { list-style-type: none; padding: 0; }
-        li { background: #1e1e1e; margin-bottom: 12px; padding: 16px; border-left: 4px solid #ff5722; border-radius: 4px; }
-        .danger { background-color: rgba(255,0,0,0.1); border: 1px solid #ff5252; padding: 15px; border-radius: 8px; color: #ff5252; font-weight: bold; }
-    </style>
+    
+    <link rel="stylesheet" href="css/style.css">
+    <script src="js/translations.js"></script>
+    <script src="js/app.js"></script>
 </head>
 <body>
-    <h1>🔥 Fire Emergency</h1>
-    <div class="danger">IF YOU ARE IN IMMEDIATE DANGER, LEAVE IMMEDIATELY. DO NOT GATHER BELONGINGS.</div>
-    
-    <h2>1. Evacuation Procedures</h2>
+    <h1 data-i18n="fire_title">🔥 Fire Emergency</h1>
+    <div class="danger" data-i18n="danger_prefix">IF YOU ARE IN IMMEDIATE DANGER, LEAVE IMMEDIATELY.</div>
+    <div style="text-align: center; margin: 20px 0;">
+        <img src="img/fire.png" style="width:100%; max-width: 400px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+    </div>
+        <h2 data-i18n="fire_h2_1">1. Evacuation Procedures</h2>
     <ul>
-        <li><strong>Stay Low:</strong> Smoke rises. Crawl or stay as close to the floor as possible to breathe cleaner air.</li>
-        <li><strong>Feel Doors:</strong> Before opening any door, feel the handle and the door itself with the back of your hand. If hot, DO NOT OPEN IT. Find another exit.</li>
-        <li><strong>Use Stairs:</strong> NEVER use the elevator during a fire. Always use the stairs.</li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text"><strong data-i18n="fire_step1_strong">Stay Low:</strong><span data-i18n="fire_step1_text"> Smoke rises. Crawl or stay as close to the floor as possible to breathe cleaner air.</span></div>
+    </li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text"><strong data-i18n="fire_step2_strong">Feel Doors:</strong><span data-i18n="fire_step2_text"> Before opening any door, feel the handle and the door itself with the back of your hand. If hot, DO NOT OPEN IT. Find another exit.</span></div>
+    </li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text"><strong data-i18n="fire_step3_strong">Use Stairs:</strong><span data-i18n="fire_step3_text"> NEVER use the elevator during a fire. Always use the stairs.</span></div>
+    </li>
     </ul>
 
-    <h2>2. If You Are Trapped</h2>
+    <h2 data-i18n="fire_h2_2">2. If You Are Trapped</h2>
     <ul>
-        <li><strong>Seal the Room:</strong> Close all doors between you and the fire. Block cracks under doors with wet towels or clothing to keep smoke out.</li>
-        <li><strong>Signal for Help:</strong> Go to a window. Wave a brightly colored cloth or use a flashlight at night to signal responders.</li>
-        <li><strong>Stay by the Window:</strong> Do not break the window unless absolutely necessary for air, as it can draw smoke into the room.</li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text"><strong data-i18n="fire_step4_strong">Seal the Room:</strong><span data-i18n="fire_step4_text"> Close all doors between you and the fire. Block cracks under doors with wet towels or clothing to keep smoke out.</span></div>
+    </li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text"><strong data-i18n="fire_step5_strong">Signal for Help:</strong><span data-i18n="fire_step5_text"> Go to a window. Wave a brightly colored cloth or use a flashlight at night to signal responders.</span></div>
+    </li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text"><strong data-i18n="fire_step6_strong">Stay by the Window:</strong><span data-i18n="fire_step6_text"> Do not break the window unless absolutely necessary for air, as it can draw smoke into the room.</span></div>
+    </li>
     </ul>
 
-    <h2>3. If Your Clothes Catch Fire</h2>
+    <h2 data-i18n="fire_h2_3">3. If Your Clothes Catch Fire</h2>
     <ul>
-        <li><strong>STOP:</strong> Do not run. Running fans the flames.</li>
-        <li><strong>DROP:</strong> Drop to the ground immediately.</li>
-        <li><strong>ROLL:</strong> Cover your face with your hands and roll back and forth to smother the flames.</li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text"><strong data-i18n="fire_step7_strong">STOP:</strong><span data-i18n="fire_step7_text"> Do not run. Running fans the flames.</span></div>
+    </li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text"><strong data-i18n="fire_step8_strong">DROP:</strong><span data-i18n="fire_step8_text"> Drop to the ground immediately.</span></div>
+    </li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text"><strong data-i18n="fire_step9_strong">ROLL:</strong><span data-i18n="fire_step9_text"> Cover your face with your hands and roll back and forth to smother the flames.</span></div>
+    </li>
     </ul>
+    <button id="fab-tts"></button>
 </body>
 </html>

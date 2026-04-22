@@ -20,6 +20,8 @@ import '../services/ble_service.dart';
 import '../services/ble_scanner_service.dart';
 import '../services/sms_fallback.dart';
 import '../services/offline_knowledge.dart';
+import '../main.dart' show appLocale;
+import '../l10n/app_localizations.dart';
 
 class SosScreen extends StatefulWidget {
   const SosScreen({super.key});
@@ -29,7 +31,7 @@ class SosScreen extends StatefulWidget {
 }
 
 class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMixin {
-  String? _selectedEmergencyType;
+  String _selectedEmergencyType = 'medical';
   late AnimationController _pulseController;
   final TextEditingController _descController = TextEditingController();
   
@@ -45,12 +47,24 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
   String _selectedRoom = VenueConfig.roomsForFloor(VenueConfig.floors.first).first;
 
   final List<Map<String, dynamic>> _emergencyTypes = [
-    {'name': 'Fire', 'icon': Icons.local_fire_department, 'color': Colors.orangeAccent},
-    {'name': 'Medical', 'icon': Icons.medical_services, 'color': Colors.redAccent},
-    {'name': 'Security', 'icon': Icons.security, 'color': Colors.lightBlueAccent},
-    {'name': 'Infrastructure', 'icon': Icons.construction, 'color': Colors.brown[400]},
-    {'name': 'Other', 'icon': Icons.help_outline, 'color': Colors.grey[400]},
+    {'id': 'fire', 'icon': Icons.local_fire_department, 'color': Colors.orangeAccent},
+    {'id': 'medical', 'icon': Icons.medical_services, 'color': Colors.redAccent},
+    {'id': 'security', 'icon': Icons.security, 'color': Colors.lightBlueAccent},
+    {'id': 'infrastructure', 'icon': Icons.construction, 'color': Colors.brown[400]},
+    {'id': 'other', 'icon': Icons.help_outline, 'color': Colors.grey[400]},
   ];
+
+  String _getLocalizedTypeName(BuildContext context, String id) {
+    final loc = AppLocalizations.of(context)!;
+    switch (id) {
+      case 'fire': return loc.typeFire;
+      case 'medical': return loc.typeMedical;
+      case 'security': return loc.typeSecurity;
+      case 'infrastructure': return loc.typeInfrastructure;
+      case 'other': return loc.typeOther;
+      default: return id;
+    }
+  }
 
   @override
   void initState() {
@@ -248,6 +262,66 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
     }
   }
 
+  void _showLanguagePicker(BuildContext context) {
+    const langs = [
+      {'locale': 'en', 'flag': '🇬🇧', 'name': 'English'},
+      {'locale': 'es', 'flag': '🇪🇸', 'name': 'Español'},
+      {'locale': 'fr', 'flag': '🇫🇷', 'name': 'Français'},
+      {'locale': 'hi', 'flag': '🇮🇳', 'name': 'हिन्दी'},
+      {'locale': 'ta', 'flag': '🇮🇳', 'name': 'தமிழ்'},
+    ];
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.grey[900],
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40, height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const Text(
+                'Select Language',
+                style: TextStyle(color: Colors.white70, fontSize: 13, letterSpacing: 1.2),
+              ),
+              const SizedBox(height: 12),
+              ...langs.map((l) {
+                final isSelected = appLocale.value.languageCode == l['locale'];
+                return ListTile(
+                  leading: Text(l['flag']!, style: const TextStyle(fontSize: 26)),
+                  title: Text(
+                    l['name']!,
+                    style: TextStyle(
+                      color: isSelected ? Colors.redAccent : Colors.white,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                  trailing: isSelected
+                    ? const Icon(Icons.check, color: Colors.redAccent, size: 18)
+                    : null,
+                  onTap: () {
+                    appLocale.value = Locale(l['locale']!);
+                    Navigator.of(context).pop();
+                  },
+                );
+              }),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -283,6 +357,16 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
                           letterSpacing: 4.0,
                         ),
                       ),
+                      // ── Language picker (left) ─────────────────────
+                      Positioned(
+                        left: 0,
+                        child: IconButton(
+                          icon: const Icon(Icons.language, color: Colors.white70),
+                          tooltip: 'Change Language',
+                          onPressed: () => _showLanguagePicker(context),
+                        ),
+                      ),
+                      // ── Knowledge library (right) ──────────────────
                       Positioned(
                         right: 0,
                         child: IconButton(
@@ -373,10 +457,10 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
                 ),
                 const SizedBox(height: 24),
                 
-                const Text(
-                  'What is your emergency?',
+                Text(
+                  AppLocalizations.of(context)!.sosTypeLabel,
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: Colors.white70,
                     fontSize: 16,
                     fontWeight: FontWeight.w400,
@@ -399,8 +483,10 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
                   children: [
                     _buildMicButton(),
                     _buildActionButton(
-                      _attachedImage != null ? Icons.check_circle : Icons.camera_alt, 
-                      _attachedImage != null ? 'Photo Attached' : 'Attach Photo', 
+                      _attachedImage != null ? Icons.check_circle : Icons.camera_alt,
+                      _attachedImage != null
+                        ? AppLocalizations.of(context)!.sosRemovePhoto
+                        : AppLocalizations.of(context)!.sosAttachPhoto,
                       _attachPhoto,
                       color: _attachedImage != null ? Colors.green[700] : Colors.grey[850],
                     ),
@@ -411,7 +497,7 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
                   controller: _descController,
                   style: const TextStyle(color: Colors.white, fontSize: 13),
                   decoration: InputDecoration(
-                    hintText: 'Tap to type details (optional)...',
+                    hintText: AppLocalizations.of(context)!.sosDescriptionHint,
                     hintStyle: const TextStyle(color: Colors.white54),
                     filled: true,
                     fillColor: Colors.grey[850],
@@ -433,10 +519,10 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
                         } else {
                           ScaffoldMessenger.of(context).hideCurrentSnackBar();
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Please select an emergency type first!'),
+                            SnackBar(
+                              content: Text(AppLocalizations.of(context)!.errorGeneric),
                               backgroundColor: Colors.orange,
-                              duration: Duration(milliseconds: 1500),
+                              duration: const Duration(milliseconds: 1500),
                             ),
                           );
                         }
@@ -477,22 +563,23 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
                               ),
                               child: Center(
                                 child: _isSubmitting 
-                                  ? const Column(
+                                  ? Column(
                                       mainAxisAlignment: MainAxisAlignment.center,
                                       children: [
-                                        CircularProgressIndicator(color: Colors.white),
-                                        SizedBox(height: 12),
-                                        Text('SENDING...', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                        const CircularProgressIndicator(color: Colors.white),
+                                        const SizedBox(height: 12),
+                                        Text(AppLocalizations.of(context)!.sosSending,
+                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                                       ],
                                     )
-                                  : const Column(
+                                  : Column(
                                       mainAxisAlignment: MainAxisAlignment.center,
                                       children: [
-                                        Icon(Icons.warning_amber_rounded, size: 50, color: Colors.white),
-                                        SizedBox(height: 8),
+                                        const Icon(Icons.warning_amber_rounded, size: 50, color: Colors.white),
+                                        const SizedBox(height: 8),
                                         Text(
-                                          'SOS',
-                                          style: TextStyle(
+                                          AppLocalizations.of(context)!.sosButtonLabel,
+                                          style: const TextStyle(
                                             color: Colors.white, 
                                             fontSize: 32, 
                                             fontWeight: FontWeight.w900, 
@@ -526,7 +613,7 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
   }
 
   Widget _buildEmergencyTypeCard(Map<String, dynamic> type) {
-    bool isSelected = _selectedEmergencyType == type['name'];
+    bool isSelected = _selectedEmergencyType == type['id'];
     Color typeColor = type['color'] as Color;
     
     return Material(
@@ -535,7 +622,7 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
         onTap: () {
           HapticFeedback.lightImpact();
           setState(() {
-            _selectedEmergencyType = type['name'];
+            _selectedEmergencyType = type['id'];
           });
         },
         borderRadius: BorderRadius.circular(20),
@@ -588,7 +675,7 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
               ),
               const SizedBox(height: 10),
               Text(
-                type['name'],
+                _getLocalizedTypeName(context, type['id']),
                 style: TextStyle(
                   color: isSelected ? Colors.white : Colors.white54,
                   fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400,

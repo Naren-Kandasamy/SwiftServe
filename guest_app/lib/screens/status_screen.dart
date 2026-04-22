@@ -5,6 +5,7 @@ import 'package:shared/models/alert.dart';
 import 'package:shared/models/incident.dart';
 import 'sos_screen.dart';
 import 'chat_panel.dart';
+import '../l10n/app_localizations.dart';
 
 class StatusScreen extends StatefulWidget {
   final String alertId;
@@ -77,7 +78,7 @@ class _StatusScreenState extends State<StatusScreen> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text('Emergency Status', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+        title: Text(AppLocalizations.of(context)!.statusTitle, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
         backgroundColor: Colors.red[900],
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -127,31 +128,31 @@ class _StatusScreenState extends State<StatusScreen> {
                 ),
               )
             else
-              const Padding(
-                padding: EdgeInsets.all(24.0),
+              Padding(
+                padding: const EdgeInsets.all(24.0),
                 child: Center(
                   child: Column(
                     children: [
-                      CircularProgressIndicator(color: Colors.redAccent, strokeWidth: 3),
-                      SizedBox(height: 16),
-                      Text('Gemini AI analyzing situation...', style: TextStyle(color: Colors.white54)),
+                      const CircularProgressIndicator(color: Colors.redAccent, strokeWidth: 3),
+                      const SizedBox(height: 16),
+                      Text(AppLocalizations.of(context)!.statusWaiting, style: const TextStyle(color: Colors.white54)),
                     ],
                   ),
                 ),
               ),
 
             // Live Timeline Log
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
               child: Text(
-                'LIVE UPDATES',
-                style: TextStyle(color: Colors.white54, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+                AppLocalizations.of(context)!.statusInstructions,
+                style: const TextStyle(color: Colors.white54, fontWeight: FontWeight.bold, letterSpacing: 1.2),
               ),
             ),
             
             Expanded(
               child: _incident == null
-                  ? const Center(child: Text('Connecting to responder network...', style: TextStyle(color: Colors.white30)))
+                  ? Center(child: Text(AppLocalizations.of(context)!.statusWaiting, style: const TextStyle(color: Colors.white30)))
                   : ListView.builder(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       itemCount: _incident!.timeline.length,
@@ -201,8 +202,10 @@ class _StatusScreenState extends State<StatusScreen> {
                 children: [
                   Icon(isAssigned ? Icons.directions_run : Icons.access_time, color: Colors.white),
                   const SizedBox(width: 12),
-                  Text(
-                    isAssigned ? 'STAFF DISPATCHED – EN ROUTE' : 'HELP IS ON THE WAY',
+                    Text(
+                    isAssigned
+                      ? AppLocalizations.of(context)!.statusAssigned
+                      : AppLocalizations.of(context)!.statusWaiting,
                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1.1),
                   ),
                 ],

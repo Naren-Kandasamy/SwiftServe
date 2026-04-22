@@ -4,36 +4,83 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CPR Guide</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #121212; color: #fff; line-height: 1.6; padding: 20px; }
-        h1 { color: #f44336; font-size: 28px; border-bottom: 2px solid #f44336; padding-bottom: 10px; }
-        h2 { color: #ef5350; font-size: 20px; margin-top: 24px; }
-        ul { list-style-type: none; padding: 0; }
-        li { background: #1e1e1e; margin-bottom: 12px; padding: 16px; border-left: 4px solid #f44336; border-radius: 4px; }
-    </style>
+    
+    <link rel="stylesheet" href="css/style.css">
+    <script src="js/translations.js"></script>
+    <script src="js/app.js"></script>
 </head>
 <body>
-    <h1>❤️ Hands-Only CPR</h1>
+    <h1 data-i18n="cpr_title">❤️ Hands-Only CPR</h1>
     
-    <h2>1. Check the Scene and the Person</h2>
+    <h2 data-i18n="cpr_h2_1">1. Check the Scene and the Person</h2>
     <ul>
-        <li><strong>Ensure Safety:</strong> Make sure the environment is safe for you and the victim.</li>
-        <li><strong>Check Responsiveness:</strong> Tap their shoulder and shout, "Are you OK?"</li>
-        <li><strong>Check Breathing:</strong> Look for chest rise. If they are not breathing normally, begin CPR immediately.</li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text"><strong data-i18n="cpr_step1_strong">Ensure Safety:</strong> <span data-i18n="cpr_step1_text">Make sure the environment is safe for you and the victim.</span></div>
+    </li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text"><strong data-i18n="cpr_step2_strong">Check Responsiveness:</strong> <span data-i18n="cpr_step2_text">Tap their shoulder and shout, "Are you OK?"</span>
+            <br><img src="img/cpr1.png" style="width:100%; max-width: 400px; border-radius: 8px; margin-top: 10px; display: block; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+        </div>
+    </li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text"><strong data-i18n="cpr_step3_strong">Check Breathing:</strong> <span data-i18n="cpr_step3_text">Look for chest rise. If they are not breathing normally, begin CPR immediately.</span></div>
+    </li>
     </ul>
 
-    <h2>2. Position Your Hands</h2>
+    <h2 data-i18n="cpr_h2_2">2. Position Your Hands</h2>
     <ul>
-        <li><strong>Kneel:</strong> Kneel beside the person's chest.</li>
-        <li><strong>Hand Placement:</strong> Place the heel of one hand in the center of their chest (between the nipples). Place your other hand on top and interlock your fingers.</li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text"><strong data-i18n="cpr_step4_strong">Kneel:</strong> <span data-i18n="cpr_step4_text">Kneel beside the person's chest.</span></div>
+    </li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text"><strong data-i18n="cpr_step5_strong">Hand Placement:</strong> <span data-i18n="cpr_step5_text">Place the heel of one hand in the center of their chest (between the nipples). Place your other hand on top and interlock your fingers.</span>
+            <br><img src="img/cpr2.png" style="width:100%; max-width: 400px; border-radius: 8px; margin-top: 10px; display: block; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+        </div>
+    </li>
     </ul>
 
-    <h2>3. Push Hard and Fast</h2>
+    <h2 data-i18n="cpr_h2_3">3. Push Hard and Fast</h2>
     <ul>
-        <li><strong>Depth:</strong> Push down at least 2 inches (5 cm).</li>
-        <li><strong>Rate:</strong> Push at a rate of 100 to 120 compressions per minute (to the beat of "Stayin' Alive").</li>
-        <li><strong>Recoil:</strong> Let the chest rise completely between each compression.</li>
-        <li><strong>Do NOT stop:</strong> Continue until an AED arrives, help arrives, or the person starts breathing.</li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text"><strong data-i18n="cpr_step6_strong">Depth:</strong> <span data-i18n="cpr_step6_text">Push down at least 2 inches (5 cm).</span></div>
+    </li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text"><strong data-i18n="cpr_step7_strong">Rate:</strong> <span data-i18n="cpr_step7_text">Push at a rate of 100 to 120 compressions per minute (to the beat of "Stayin' Alive").</span></div>
+    </li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text"><strong data-i18n="cpr_step8_strong">Recoil:</strong> <span data-i18n="cpr_step8_text">Let the chest rise completely between each compression.</span></div>
+    </li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text"><strong data-i18n="cpr_step9_strong">Do NOT stop:</strong> <span data-i18n="cpr_step9_text">Continue until an AED arrives, help arrives, or the person starts breathing.</span></div>
+    </li>
     </ul>
+    <button id="fab-tts"></button>
 </body>
 </html>

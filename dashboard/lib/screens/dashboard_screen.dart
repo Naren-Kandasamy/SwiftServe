@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 // ignore: avoid_web_libraries_in_flutter
 import 'dart:html' as html;
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:js' as js;
 import 'package:firebase_database/firebase_database.dart';
 import 'package:shared/models/alert.dart';
 import 'package:shared/models/incident.dart';
@@ -27,10 +29,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String _searchQuery = '';
   String _sortBy = 'severity';
   EmergencyType? _filterType;
-  // Triaged incidents (written by AI Cloud Function after classify)
   List<Incident> _incidents = [];
-  // Raw alerts from guest app (written immediately on SOS button press)
   List<Alert> _rawAlerts = [];
+
+  // ── Alert / tab-badge state ─────────────────────────────────────
+  int _unreadCritical = 0;
+  bool _initialized = false; // suppress alerts on first load
+  final Set<String> _seenIncidentIds = {};
 
   @override
   void initState() {
@@ -38,6 +43,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _requestNotificationPermission();
     _subscribeToIncidents();
     _subscribeToAlerts();
+    // Reset tab badge when window regains focus
+    html.window.onFocus.listen((_) {
+      if (!mounted) return;
+      setState(() => _unreadCritical = 0);
+      html.document.title = 'CrisisNet';
+    });
   }
 
   void _requestNotificationPermission() {
@@ -50,7 +61,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   // ─── Firebase Listeners ────────────────────────────────────────────────────
 
-  /// Listens to classifed Incident documents (Module 3 output).
+  /// Listens to classified Incident documents (Module 3 output).
   void _subscribeToIncidents() {
     FirebaseDatabase.instance
         .ref('venues/$_venueId/incidents')
@@ -59,6 +70,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (!mounted) return;
       if (event.snapshot.value == null) {
         setState(() => _incidents = []);
+        _initialized = true;
         return;
       }
       final data = event.snapshot.value;
@@ -68,13 +80,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
       data.forEach((key, value) {
         if (value is Map) {
           try {
-            updated.add(Incident.fromMap(Map<dynamic, dynamic>.from(value)));
+            final incident = Incident.fromMap(Map<dynamic, dynamic>.from(value));
+            updated.add(incident);
+
+            // Alert staff to genuinely NEW critical incidents
+            if (_initialized &&
+                !_seenIncidentIds.contains(incident.id) &&
+                incident.severity >= 4) {
+              _playAlertTone();
+              setState(() => _unreadCritical++);
+              html.document.title = '($_unreadCritical NEW) CrisisNet';
+            }
+            _seenIncidentIds.add(incident.id);
           } catch (_) {}
         }
       });
       updated.sort((a, b) => b.severity.compareTo(a.severity));
       setState(() => _incidents = updated);
+      _initialized = true;
     });
+  }
+
+  /// Plays a short 880 Hz sine-wave ping via the Web Audio API (dart:js interop).
+  void _playAlertTone() {
+    try {
+      final ctx = js.JsObject(js.context['AudioContext'] as js.JsFunction);
+      final osc = ctx.callMethod('createOscillator') as js.JsObject;
+      final gain = ctx.callMethod('createGain') as js.JsObject;
+      osc.callMethod('connect', [gain]);
+      gain.callMethod('connect', [ctx['destination']]);
+      osc['type'] = 'sine';
+      final now = ctx['currentTime'] as num;
+      (osc['frequency'] as js.JsObject).callMethod('setValueAtTime', [880, now]);
+      final gainParam = gain['gain'] as js.JsObject;
+      gainParam.callMethod('setValueAtTime', [0.3, now]);
+      gainParam.callMethod('exponentialRampToValueAtTime', [0.001, now + 0.45]);
+      osc.callMethod('start', []);
+      osc.callMethod('stop', [now + 0.45]);
+    } catch (_) {}
   }
 
   /// Listens to raw Alert objects written by the Guest App on SOS.

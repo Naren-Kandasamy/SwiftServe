@@ -4,33 +4,63 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Wound Management</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #121212; color: #fff; line-height: 1.6; padding: 20px; }
-        h1 { color: #e91e63; font-size: 28px; border-bottom: 2px solid #e91e63; padding-bottom: 10px; }
-        h2 { color: #f06292; font-size: 20px; margin-top: 24px; }
-        ul { list-style-type: none; padding: 0; }
-        li { background: #1e1e1e; margin-bottom: 12px; padding: 16px; border-left: 4px solid #e91e63; border-radius: 4px; }
-    </style>
+    
+    <link rel="stylesheet" href="css/style.css">
+    <script src="js/translations.js"></script>
+    <script src="js/app.js"></script>
 </head>
 <body>
-    <h1>🩸 Severe Bleeding & Wounds</h1>
-    
-    <h2>1. Stop the Bleeding</h2>
+    <h1 data-i18n="wounds_title">🩸 Severe Bleeding & Wounds</h1>
+    <div style="text-align: center; margin: 20px 0;">
+        <img src="img/wounds.png" style="width:100%; max-width: 400px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+    </div>
+        <h2 data-i18n="wounds_h2_1">1. Stop the Bleeding</h2>
     <ul>
-        <li>Apply direct, firm pressure to the wound with a clean cloth, tissue, or piece of clothing.</li>
-        <li>Do not remove the cloth if blood soaks through. Add another layer on top and continue applying pressure.</li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text" data-i18n="wounds_step1">Apply direct, firm pressure to the wound with a clean cloth, tissue, or piece of clothing.</div>
+    </li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text" data-i18n="wounds_step2">Do not remove the cloth if blood soaks through. Add another layer on top and continue applying pressure.</div>
+    </li>
     </ul>
 
-    <h2>2. Elevate</h2>
+    <h2 data-i18n="wounds_h2_2">2. Elevate</h2>
     <ul>
-        <li>If the wound is on an arm or leg, raise it above the level of the heart if possible, while maintaining direct pressure.</li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text" data-i18n="wounds_step3">If the wound is on an arm or leg, raise it above the level of the heart if possible, while maintaining direct pressure.</div>
+    </li>
     </ul>
 
-    <h2>3. Treat for Shock</h2>
+    <h2 data-i18n="wounds_h2_3">3. Treat for Shock</h2>
     <ul>
-        <li>Have the person lie down.</li>
-        <li>Elevate their legs slightly (unless you suspect a head, neck, or back injury, or broken leg).</li>
-        <li>Keep them warm with a coat or blanket. Do not give them anything to eat or drink.</li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text" data-i18n="wounds_step4">Have the person lie down.</div>
+    </li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text" data-i18n="wounds_step5">Elevate their legs slightly (unless you suspect a head, neck, or back injury, or broken leg).</div>
+    </li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text" data-i18n="wounds_step6">Keep them warm with a coat or blanket. Do not give them anything to eat or drink.</div>
+    </li>
     </ul>
+    <button id="fab-tts"></button>
 </body>
 </html>

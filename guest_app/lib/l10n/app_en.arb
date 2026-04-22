@@ -1,0 +1,45 @@
+{
+  "@@locale": "en",
+
+  "appName": "CrisisNet",
+  "sosButtonLabel": "SEND SOS",
+  "sosButtonHint": "Press to alert emergency staff",
+  "sosRecordingLabel": "Recording...",
+  "sosTypeLabel": "Emergency Type",
+  "sosRoomLabel": "Room / Location",
+  "sosDescriptionHint": "Describe what is happening...",
+  "sosAttachPhoto": "Attach Photo",
+  "sosRemovePhoto": "Remove",
+  "sosSending": "Sending SOS...",
+  "sosSent": "SOS Sent",
+
+  "statusTitle": "Emergency Status",
+  "statusWaiting": "Waiting for response...",
+  "statusTriaged": "Triaged by AI",
+  "statusAssigned": "Staff Dispatched",
+  "statusEscalated": "Escalated to Emergency Services",
+  "statusResolved": "Resolved",
+  "statusContained": "Contained",
+  "statusInstructions": "Safety Instructions",
+  "statusRoom": "Room",
+  "statusType": "Emergency Type",
+  "typeFire": "Fire",
+  "typeMedical": "Medical",
+  "typeSecurity": "Security",
+  "typeInfrastructure": "Infrastructure",
+  "typeOther": "Other",
+  "statusOpenChat": "Open Chat",
+  "statusBack": "Report Another Emergency",
+
+  "chatTitle": "Emergency Chat",
+  "chatPlaceholder": "Type a message...",
+  "chatSend": "Send",
+  "chatConnecting": "Connecting...",
+
+  "offlineWarning": "No internet — using offline safety guide",
+  "offlineGuideTitle": "Emergency Safety Guide",
+
+  "errorGeneric": "Something went wrong. Please try again.",
+  "errorNoLocation": "Could not determine your location.",
+  "errorSendFailed": "Failed to send SOS. Please call reception."
+}
