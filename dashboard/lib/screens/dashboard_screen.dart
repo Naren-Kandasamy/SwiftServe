@@ -7,6 +7,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared/models/alert.dart';
 import 'package:shared/models/incident.dart';
+import 'package:shared/models/user.dart';
 import '../services/triage_service.dart';
 import '../widgets/incident_card.dart';
 import '../widgets/venue_map.dart';
@@ -37,6 +38,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _unreadCritical = 0;
   bool _initialized = false; // suppress alerts on first load
   final Set<String> _seenIncidentIds = {};
+  UserRole _currentRole = UserRole.admin;
 
   @override
   void initState() {
@@ -245,6 +247,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     var filteredIncidents = _incidents.where((i) {
+      // Role-based filtering
+      if (_currentRole == UserRole.guest) return false;
+      if (_currentRole == UserRole.medical && i.type != EmergencyType.medical) return false;
+      if (_currentRole == UserRole.security && i.type != EmergencyType.security && i.type != EmergencyType.fire && i.type != EmergencyType.infrastructure) return false;
+
       final text = _searchQuery.toLowerCase();
       final textMatch = i.type.name.toLowerCase().contains(text) || i.affectedZone.toLowerCase().contains(text);
       final typeMatch = _filterType == null || i.type == _filterType;
@@ -252,8 +259,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }).toList();
 
     var filteredAlerts = _rawAlerts.where((a) {
-      final text = _searchQuery.toLowerCase();
       final typeName = (a.type ?? EmergencyType.other).name.toLowerCase();
+      
+      // Role-based filtering
+      final type = a.type ?? EmergencyType.other;
+      if (_currentRole == UserRole.guest) return false;
+      if (_currentRole == UserRole.medical && type != EmergencyType.medical) return false;
+      if (_currentRole == UserRole.security && type != EmergencyType.security && type != EmergencyType.fire && type != EmergencyType.infrastructure) return false;
+
+      final text = _searchQuery.toLowerCase();
       final textMatch = typeName.contains(text) ||
           a.roomNumber.toLowerCase().contains(text) ||
           a.description.toLowerCase().contains(text);
@@ -313,6 +327,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             PopupMenuButton<String>(
               offset: const Offset(0, 45),
               color: Colors.grey[900],
+              tooltip: '${_currentRole.name.toUpperCase()} Profile',
               icon: const CircleAvatar(
                 backgroundColor: Colors.grey,
                 child: Icon(Icons.person, color: Colors.white),
@@ -324,19 +339,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 } else if (value == 'settings') {
                   showDialog(
                     context: context,
-                    builder: (context) => const StaffProfileDialog(initialTab: 1),
+                    builder: (context) => StaffProfileDialog(
+                      initialTab: 1,
+                      currentRole: _currentRole,
+                      onRoleChanged: (role) => setState(() => _currentRole = role),
+                    ),
                   );
                 } else if (value == 'profile') {
                   showDialog(
                     context: context,
-                    builder: (context) => const StaffProfileDialog(initialTab: 0),
+                    builder: (context) => StaffProfileDialog(
+                      initialTab: 0,
+                      currentRole: _currentRole,
+                      onRoleChanged: (role) => setState(() => _currentRole = role),
+                    ),
                   );
                 }
               },
               itemBuilder: (BuildContext context) => [
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'profile',
-                  child: Row(children: [Icon(Icons.badge, color: Colors.white), SizedBox(width: 8), Text('Admin Profile', style: TextStyle(color: Colors.white))]),
+                  child: Row(children: [const Icon(Icons.badge, color: Colors.white), const SizedBox(width: 8), Text('${_currentRole.name.toUpperCase()} Profile', style: const TextStyle(color: Colors.white))]),
                 ),
                 const PopupMenuItem(
                   value: 'settings',
@@ -674,7 +697,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
 class StaffProfileDialog extends StatefulWidget {
   final int initialTab;
-  const StaffProfileDialog({super.key, this.initialTab = 0});
+  final UserRole currentRole;
+  final Function(UserRole) onRoleChanged;
+
+  const StaffProfileDialog({
+    super.key,
+    this.initialTab = 0,
+    required this.currentRole,
+    required this.onRoleChanged,
+  });
 
   @override
   State<StaffProfileDialog> createState() => _StaffProfileDialogState();
@@ -682,11 +713,13 @@ class StaffProfileDialog extends StatefulWidget {
 
 class _StaffProfileDialogState extends State<StaffProfileDialog> {
   late int _selectedTab;
+  late UserRole _localRole;
 
   @override
   void initState() {
     super.initState();
     _selectedTab = widget.initialTab;
+    _localRole = widget.currentRole;
   }
 
   @override
@@ -715,7 +748,7 @@ class _StaffProfileDialogState extends State<StaffProfileDialog> {
                     child: Icon(Icons.person, size: 30, color: Colors.white),
                   ),
                   const SizedBox(height: 10),
-                  const Text('Admin', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  Text(_getRoleDisplayName(_localRole), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                   const Text('Command Center', style: TextStyle(color: Colors.white54, fontSize: 11)),
                   const SizedBox(height: 20),
                   ListTile(
@@ -756,7 +789,40 @@ class _StaffProfileDialogState extends State<StaffProfileDialog> {
         const Divider(color: Colors.white12),
         const SizedBox(height: 16),
         _infoRow('Name', 'Admin User'),
-        _infoRow('Role', 'System Administrator'),
+        
+        // Role Dropdown for Demo
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8.0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const SizedBox(width: 100, child: Text('Role (Demo)', style: TextStyle(color: Colors.white54))),
+              Expanded(
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<UserRole>(
+                    dropdownColor: Colors.grey[850],
+                    value: _localRole,
+                    isDense: true,
+                    style: const TextStyle(color: Colors.white),
+                    items: UserRole.values.map((role) {
+                      return DropdownMenuItem<UserRole>(
+                        value: role,
+                        child: Text(_getRoleDisplayName(role)),
+                      );
+                    }).toList(),
+                    onChanged: (newRole) {
+                      if (newRole != null) {
+                        setState(() => _localRole = newRole);
+                        widget.onRoleChanged(newRole);
+                      }
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
         _infoRow('ID', 'EMP-001'),
         _infoRow('Department', 'Command Center'),
         _infoRow('Clearance', 'Level 5 (Max)'),
@@ -800,5 +866,15 @@ class _StaffProfileDialogState extends State<StaffProfileDialog> {
         ],
       ),
     );
+  }
+
+  String _getRoleDisplayName(UserRole role) {
+    switch (role) {
+      case UserRole.admin: return 'System Administrator';
+      case UserRole.management: return 'Management';
+      case UserRole.security: return 'Security';
+      case UserRole.medical: return 'Medical';
+      case UserRole.guest: return 'Guest';
+    }
   }
 }
