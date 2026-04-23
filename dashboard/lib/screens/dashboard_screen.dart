@@ -4,6 +4,7 @@ import 'dart:html' as html;
 // ignore: avoid_web_libraries_in_flutter
 import 'dart:js' as js;
 import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared/models/alert.dart';
 import 'package:shared/models/incident.dart';
 import '../services/triage_service.dart';
@@ -316,11 +317,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 backgroundColor: Colors.grey,
                 child: Icon(Icons.person, color: Colors.white),
               ),
-              onSelected: (value) {
+              onSelected: (value) async {
                 if (value == 'logout') {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Logging out...')),
-                  );
+                  await FirebaseAuth.instance.signOut();
+                  // _AuthGate stream in main.dart auto-navigates to LoginScreen
                 } else if (value == 'settings') {
                   showDialog(
                     context: context,
