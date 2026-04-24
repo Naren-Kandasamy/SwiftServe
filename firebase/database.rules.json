@@ -4,18 +4,23 @@
       "$venueId": {
         "alerts": {
           ".read": "auth != null",
-          ".write": "auth != null"
+          "$alertId": {
+            ".write": "auth != null && (auth.token.firebase.sign_in_provider != 'anonymous' || !data.exists())"
+          }
         },
         "incidents": {
           ".read": "auth != null",
-          ".write": "auth != null"
+          ".write": "auth != null && auth.token.firebase.sign_in_provider != 'anonymous'"
         },
         "messages": {
           ".read": "auth != null",
-          ".write": "auth != null"
+          "$messageId": {
+            ".write": "auth != null && (auth.token.firebase.sign_in_provider != 'anonymous' || !data.exists())"
+          }
         },
         "config": {
-          ".read": "auth != null"
+          ".read": "auth != null",
+          ".write": "auth != null && auth.token.firebase.sign_in_provider != 'anonymous'"
         }
       }
     }
