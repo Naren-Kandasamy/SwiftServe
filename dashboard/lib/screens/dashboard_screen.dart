@@ -219,14 +219,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final index = _incidents.indexWhere((i) => i.id == incidentId);
     if (index == -1) return;
     
-    setState(() {
-      _incidents[index].status = IncidentStatus.resolved;
-      _incidents[index].resolvedAt = DateTime.now().millisecondsSinceEpoch;
-      _incidents[index].timeline.add(IncidentUpdate(
-        timestamp: DateTime.now().millisecondsSinceEpoch,
-        updateText: 'Incident marked as Resolved by Admin.',
-      ));
-    });
+    if (_currentRole == UserRole.admin) {
+      setState(() {
+        _incidents[index].status = IncidentStatus.resolved;
+        _incidents[index].resolvedAt = DateTime.now().millisecondsSinceEpoch;
+        _incidents[index].timeline.add(IncidentUpdate(
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+          updateText: 'Incident marked as Resolved by Admin.',
+        ));
+      });
+    } else {
+      setState(() {
+        _incidents[index].status = IncidentStatus.reviewPending;
+        _incidents[index].requestedResolutionBy = _currentRole.name;
+        _incidents[index].timeline.add(IncidentUpdate(
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+          updateText: 'Resolution requested by ${_currentRole.name.toUpperCase()}.',
+        ));
+      });
+    }
 
     try {
       await FirebaseDatabase.instance
@@ -275,20 +286,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return textMatch && typeMatch;
     }).toList();
 
-    var activeIncidents = filteredIncidents.where((i) => i.status != IncidentStatus.resolved).toList();
+    var activeIncidents = filteredIncidents.where((i) => i.status != IncidentStatus.resolved && i.status != IncidentStatus.reviewPending).toList();
+    var pendingReviewIncidents = filteredIncidents.where((i) => i.status == IncidentStatus.reviewPending).toList();
     var resolvedIncidents = filteredIncidents.where((i) => i.status == IncidentStatus.resolved).toList();
 
     if (_sortBy == 'severity') {
       activeIncidents.sort((a, b) => b.severity.compareTo(a.severity));
+      pendingReviewIncidents.sort((a, b) => b.severity.compareTo(a.severity));
       resolvedIncidents.sort((a, b) => b.severity.compareTo(a.severity));
       filteredAlerts.sort((a, b) => (b.severity ?? 3).compareTo(a.severity ?? 3));
     } else {
       activeIncidents.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      pendingReviewIncidents.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       resolvedIncidents.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       filteredAlerts.sort((a, b) => b.timestamp.compareTo(a.timestamp));
     }
 
-    final int totalCount = activeIncidents.length + _rawAlerts.length;
+    final int totalCount = activeIncidents.length + pendingReviewIncidents.length + _rawAlerts.length;
 
     return Scaffold(
       appBar: AppBar(
@@ -324,6 +338,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
               onPressed: _clearDatabase,
             ),
             const SizedBox(width: 8),
+            ToggleButtons(
+              isSelected: [
+                _currentRole == UserRole.admin,
+                _currentRole == UserRole.security,
+                _currentRole == UserRole.medical,
+              ],
+              onPressed: (int index) {
+                setState(() {
+                  if (index == 0) _currentRole = UserRole.admin;
+                  if (index == 1) _currentRole = UserRole.security;
+                  if (index == 2) _currentRole = UserRole.medical;
+                });
+              },
+              color: Colors.white54,
+              selectedColor: Colors.white,
+              fillColor: Colors.blueAccent.withValues(alpha: 0.2),
+              borderColor: Colors.white12,
+              selectedBorderColor: Colors.blueAccent,
+              borderRadius: BorderRadius.circular(8),
+              constraints: const BoxConstraints(minHeight: 36, minWidth: 70),
+              children: const [
+                Text('Admin', style: TextStyle(fontSize: 12)),
+                Text('Security', style: TextStyle(fontSize: 12)),
+                Text('Medical', style: TextStyle(fontSize: 12)),
+              ],
+            ),
+            const SizedBox(width: 16),
             PopupMenuButton<String>(
               offset: const Offset(0, 45),
               color: Colors.grey[900],
@@ -465,6 +506,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                         ...activeIncidents.map((incident) => IncidentCard(
                           incidentData: incident,
+                          currentRole: _currentRole,
                           onAssign: () => _showAssignDialog(context, incident.id),
                           onEscalate: () => _escalateIncident(incident.id),
                           onResolve: () => _resolveIncident(incident.id),
@@ -484,10 +526,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           opacity: 0.6,
                           child: IncidentCard(
                             incidentData: incident,
+                            currentRole: _currentRole,
                             onAssign: () {},
                             onEscalate: () {},
                             onResolve: () {}, // Already resolved
                           ),
+                        )),
+                      ],
+
+                      // ── Pending Review section ──────────────────────────
+                      if (pendingReviewIncidents.isNotEmpty) ...[
+                        const Padding(
+                          padding: EdgeInsets.fromLTRB(16, 24, 16, 4),
+                          child: Text(
+                            'REVIEW PENDING',
+                            style: TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold, letterSpacing: 1.2, fontSize: 11),
+                          ),
+                        ),
+                        ...pendingReviewIncidents.map((incident) => IncidentCard(
+                          incidentData: incident,
+                          currentRole: _currentRole,
+                          onAssign: () => _showAssignDialog(context, incident.id),
+                          onEscalate: () => _escalateIncident(incident.id),
+                          onResolve: () => _resolveIncident(incident.id),
                         )),
                       ],
 
@@ -504,7 +565,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ],
 
                       // ── Empty state ─────────────────────────────────────────
-                      if (activeIncidents.isEmpty && resolvedIncidents.isEmpty && filteredAlerts.isEmpty)
+                      if (activeIncidents.isEmpty && resolvedIncidents.isEmpty && pendingReviewIncidents.isEmpty && filteredAlerts.isEmpty)
                         SizedBox(
                           height: 400,
                           child: Center(

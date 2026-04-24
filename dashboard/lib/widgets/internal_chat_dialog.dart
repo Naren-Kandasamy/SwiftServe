@@ -3,18 +3,24 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared/models/incident.dart';
 import 'package:shared/models/message.dart';
+import 'package:shared/models/user.dart';
 import 'package:uuid/uuid.dart';
 
-class IncidentChatDialog extends StatefulWidget {
+class InternalChatDialog extends StatefulWidget {
   final Incident incident;
+  final UserRole currentRole;
   
-  const IncidentChatDialog({super.key, required this.incident});
+  const InternalChatDialog({
+    super.key, 
+    required this.incident,
+    required this.currentRole,
+  });
 
   @override
-  State<IncidentChatDialog> createState() => _IncidentChatDialogState();
+  State<InternalChatDialog> createState() => _InternalChatDialogState();
 }
 
-class _IncidentChatDialogState extends State<IncidentChatDialog> {
+class _InternalChatDialogState extends State<InternalChatDialog> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   List<ChatMessage> _messages = [];
@@ -27,7 +33,7 @@ class _IncidentChatDialogState extends State<IncidentChatDialog> {
 
   void _subscribeToMessages() {
     FirebaseDatabase.instance
-        .ref('venues/${widget.incident.venueId}/messages/${widget.incident.id}')
+        .ref('venues/${widget.incident.venueId}/internal_messages/${widget.incident.id}')
         .onValue
         .listen((event) {
       if (!mounted) return;
@@ -71,16 +77,22 @@ class _IncidentChatDialogState extends State<IncidentChatDialog> {
 
     final msgId = const Uuid().v4();
     final uid = FirebaseAuth.instance.currentUser?.uid ?? 'staff_mock';
+    
+    // We add role information as prefix to text for simplicity here,
+    // or we could add a new field to ChatMessage if it supported it.
+    // For now, let's prefix it so it's clear who is speaking.
+    final finalizerText = '[${widget.currentRole.name.toUpperCase()}] $text';
+
     final chatMsg = ChatMessage(
       id: msgId,
       senderId: uid,
-      text: text,
+      text: finalizerText,
       timestamp: DateTime.now().millisecondsSinceEpoch,
-      isStaff: true, // we are on the dashboard
+      isStaff: true, // internal chat, everyone is staff/admin
     );
 
     await FirebaseDatabase.instance
-        .ref('venues/${widget.incident.venueId}/messages/${widget.incident.id}/$msgId')
+        .ref('venues/${widget.incident.venueId}/internal_messages/${widget.incident.id}/$msgId')
         .set(chatMsg.toMap());
   }
 
@@ -91,22 +103,22 @@ class _IncidentChatDialogState extends State<IncidentChatDialog> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: SizedBox(
         width: 400,
-        height: 600,
+        height: 550,
         child: Column(
           children: [
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: Colors.red[900],
+                color: Colors.purple[800],
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.forum, color: Colors.white),
+                  const Icon(Icons.people, color: Colors.white),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Chat w/ Guest (Room ${widget.incident.affectedZone})',
+                      'Internal Command Chat',
                       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -120,16 +132,26 @@ class _IncidentChatDialogState extends State<IncidentChatDialog> {
             ),
             Expanded(
               child: _messages.isEmpty
-                  ? const Center(child: Text('No messages yet. Send one to open communication.', style: TextStyle(color: Colors.white54)))
+                  ? const Center(child: Text('No internal messages yet.', style: TextStyle(color: Colors.white54)))
                   : ListView.builder(
                       controller: _scrollController,
                       padding: const EdgeInsets.all(16),
                       itemCount: _messages.length,
                       itemBuilder: (context, index) {
                         final msg = _messages[index];
-                        final alignRight = msg.isStaff;
                         final timeString = DateTime.fromMillisecondsSinceEpoch(msg.timestamp).toString().substring(11, 16);
+                        final isAdmin = msg.text.startsWith('[ADMIN]');
+                        final isCurrentUserRole = msg.text.startsWith('[${widget.currentRole.name.toUpperCase()}]');
+                        final alignRight = isCurrentUserRole;
                         
+                        String roleLabel = 'Staff';
+                        String displayMsg = msg.text;
+                        final match = RegExp(r'^\[(.*?)\] (.*)').firstMatch(msg.text);
+                        if (match != null) {
+                           roleLabel = match.group(1)!;
+                           displayMsg = match.group(2)!;
+                        }
+
                         return Container(
                           margin: const EdgeInsets.only(bottom: 12),
                           alignment: alignRight ? Alignment.centerRight : Alignment.centerLeft,
@@ -137,15 +159,15 @@ class _IncidentChatDialogState extends State<IncidentChatDialog> {
                             constraints: const BoxConstraints(maxWidth: 300),
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: alignRight ? Colors.blue[800] : Colors.grey[800],
+                              color: isAdmin ? Colors.purple[700] : (alignRight ? Colors.blue[800] : Colors.grey[800]),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Column(
                               crossAxisAlignment: alignRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                               children: [
-                                Text(alignRight ? 'Staff' : 'Guest', style: TextStyle(color: alignRight ? Colors.blue[200] : Colors.grey[400], fontSize: 10, fontWeight: FontWeight.bold)),
+                                Text(roleLabel, style: TextStyle(color: isAdmin ? Colors.purple[200] : (alignRight ? Colors.blue[200] : Colors.grey[400]), fontSize: 10, fontWeight: FontWeight.bold)),
                                 const SizedBox(height: 4),
-                                Text(msg.text, style: const TextStyle(color: Colors.white)),
+                                Text(displayMsg, style: const TextStyle(color: Colors.white)),
                                 const SizedBox(height: 4),
                                 Text(timeString, style: const TextStyle(color: Colors.white54, fontSize: 10)),
                               ],
@@ -167,7 +189,7 @@ class _IncidentChatDialogState extends State<IncidentChatDialog> {
                       controller: _controller,
                       style: const TextStyle(color: Colors.white),
                       decoration: InputDecoration(
-                        hintText: 'Type guidance...',
+                        hintText: 'Type internal message...',
                         hintStyle: const TextStyle(color: Colors.white54),
                         filled: true,
                         fillColor: Colors.black45,
@@ -182,7 +204,7 @@ class _IncidentChatDialogState extends State<IncidentChatDialog> {
                   ),
                   const SizedBox(width: 8),
                   CircleAvatar(
-                    backgroundColor: Colors.blueAccent,
+                    backgroundColor: Colors.purpleAccent,
                     child: IconButton(
                       icon: const Icon(Icons.send, color: Colors.white, size: 18),
                       onPressed: _sendMessage,
