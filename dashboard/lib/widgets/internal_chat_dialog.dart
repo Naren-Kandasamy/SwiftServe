@@ -9,11 +9,13 @@ import 'package:uuid/uuid.dart';
 class InternalChatDialog extends StatefulWidget {
   final Incident incident;
   final UserRole currentRole;
+  final String? teamId;
   
   const InternalChatDialog({
     super.key, 
     required this.incident,
     required this.currentRole,
+    this.teamId,
   });
 
   @override
@@ -81,7 +83,8 @@ class _InternalChatDialogState extends State<InternalChatDialog> {
     // We add role information as prefix to text for simplicity here,
     // or we could add a new field to ChatMessage if it supported it.
     // For now, let's prefix it so it's clear who is speaking.
-    final finalizerText = '[${widget.currentRole.name.toUpperCase()}] $text';
+    final String label = widget.currentRole == UserRole.admin ? 'ADMIN' : (widget.teamId ?? widget.currentRole.name.toUpperCase());
+    final finalizerText = '[$label] $text';
 
     final chatMsg = ChatMessage(
       id: msgId,
@@ -140,9 +143,9 @@ class _InternalChatDialogState extends State<InternalChatDialog> {
                       itemBuilder: (context, index) {
                         final msg = _messages[index];
                         final timeString = DateTime.fromMillisecondsSinceEpoch(msg.timestamp).toString().substring(11, 16);
+                        final currentLabel = widget.currentRole == UserRole.admin ? 'ADMIN' : (widget.teamId ?? widget.currentRole.name.toUpperCase());
+                        final alignRight = msg.text.startsWith('[$currentLabel]');
                         final isAdmin = msg.text.startsWith('[ADMIN]');
-                        final isCurrentUserRole = msg.text.startsWith('[${widget.currentRole.name.toUpperCase()}]');
-                        final alignRight = isCurrentUserRole;
                         
                         String roleLabel = 'Staff';
                         String displayMsg = msg.text;

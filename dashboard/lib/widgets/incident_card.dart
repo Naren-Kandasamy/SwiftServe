@@ -71,6 +71,11 @@ class _IncidentCardState extends State<IncidentCard> {
     final bool escalated = widget.incidentData.status == IncidentStatus.escalated;
     final bool reviewPending = widget.incidentData.status == IncidentStatus.reviewPending;
     
+    // Team Assignment Label
+    final String assignedTeamsLabel = widget.incidentData.assignedTeams.isEmpty 
+        ? 'Unassigned' 
+        : widget.incidentData.assignedTeams.join(', ');
+
     final severityColor = _getSeverityColor(severity, widget.incidentData.status);
     
     return Container(
@@ -163,6 +168,17 @@ class _IncidentCardState extends State<IncidentCard> {
                 Text(time, style: const TextStyle(color: Colors.white70, fontSize: 14)),
               ],
             ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.people_outline, size: 14, color: Colors.blueAccent),
+                const SizedBox(width: 4),
+                Text(
+                  'Assigned: $assignedTeamsLabel',
+                  style: const TextStyle(color: Colors.blueAccent, fontSize: 13, fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
             const SizedBox(height: 16),
             
             // Action Buttons
@@ -230,7 +246,11 @@ class _IncidentCardState extends State<IncidentCard> {
                   onPressed: () {
                     showDialog(
                       context: context,
-                      builder: (context) => IncidentChatDialog(incident: widget.incidentData),
+                      builder: (context) => IncidentChatDialog(
+                        incident: widget.incidentData,
+                        currentRole: widget.currentRole,
+                        teamId: widget.currentRole == UserRole.admin ? 'ADMIN' : (widget.incidentData.assignedTeams.isNotEmpty ? widget.incidentData.assignedTeams.first : null),
+                      ),
                     );
                   },
                   icon: const Icon(Icons.chat, color: Colors.greenAccent, size: 16),
@@ -241,7 +261,12 @@ class _IncidentCardState extends State<IncidentCard> {
                   onPressed: () {
                     showDialog(
                       context: context,
-                      builder: (context) => InternalChatDialog(incident: widget.incidentData, currentRole: widget.currentRole),
+                      builder: (context) => InternalChatDialog(
+                        incident: widget.incidentData, 
+                        currentRole: widget.currentRole,
+                        // Pass the first assigned team as the user's team identity for chat
+                        teamId: widget.currentRole == UserRole.admin ? 'ADMIN' : (widget.incidentData.assignedTeams.isNotEmpty ? widget.incidentData.assignedTeams.first : null),
+                      ),
                     );
                   },
                   icon: const Icon(Icons.people, color: Colors.purpleAccent, size: 16),
@@ -291,8 +316,8 @@ class _IncidentCardState extends State<IncidentCard> {
                       child: Text(escalated ? 'Escalated' : 'Escalate'),
                     ),
                     ElevatedButton(
-                      // Role and state based disable logic
-                      onPressed: (reviewPending ? (widget.currentRole == UserRole.admin) : (widget.currentRole != UserRole.admin)) ? widget.onResolve : null,
+                      // Admin can always resolve. Staff can only resolve (request review) if it's not already pending review.
+                      onPressed: (widget.currentRole == UserRole.admin || !reviewPending) ? widget.onResolve : null,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green[700],
                         foregroundColor: Colors.white,

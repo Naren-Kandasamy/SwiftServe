@@ -41,6 +41,7 @@ class Incident {
   String? responderBriefUrl;
   String? imageUrl; // Optional image evidence
   String? requestedResolutionBy;
+  List<String> assignedTeams; // IDs of teams assigned to this incident
 
   Incident({
     required this.id,
@@ -57,6 +58,7 @@ class Incident {
     this.responderBriefUrl,
     this.imageUrl,
     this.requestedResolutionBy,
+    this.assignedTeams = const [],
   });
 
   factory Incident.fromMap(Map<dynamic, dynamic> map) {
@@ -81,6 +83,7 @@ class Incident {
       responderBriefUrl: map['responderBriefUrl'] as String?,
       imageUrl: map['imageUrl'] as String?,
       requestedResolutionBy: map['requestedResolutionBy'] as String?,
+      assignedTeams: (map['assignedTeams'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
     );
   }
 
@@ -100,6 +103,7 @@ class Incident {
       'responderBriefUrl': responderBriefUrl,
       'imageUrl': imageUrl,
       'requestedResolutionBy': requestedResolutionBy,
+      'assignedTeams': assignedTeams,
     };
   }
 }

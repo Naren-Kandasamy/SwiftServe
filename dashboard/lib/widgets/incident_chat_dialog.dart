@@ -3,12 +3,20 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared/models/incident.dart';
 import 'package:shared/models/message.dart';
+import 'package:shared/models/user.dart';
 import 'package:uuid/uuid.dart';
 
 class IncidentChatDialog extends StatefulWidget {
   final Incident incident;
+  final UserRole currentRole;
+  final String? teamId;
   
-  const IncidentChatDialog({super.key, required this.incident});
+  const IncidentChatDialog({
+    super.key, 
+    required this.incident,
+    required this.currentRole,
+    this.teamId,
+  });
 
   @override
   State<IncidentChatDialog> createState() => _IncidentChatDialogState();
@@ -71,10 +79,13 @@ class _IncidentChatDialogState extends State<IncidentChatDialog> {
 
     final msgId = const Uuid().v4();
     final uid = FirebaseAuth.instance.currentUser?.uid ?? 'staff_mock';
+    final String label = widget.currentRole == UserRole.admin ? 'ADMIN' : (widget.teamId ?? widget.currentRole.name.toUpperCase());
+    final String prefixedText = '[$label] $text';
+
     final chatMsg = ChatMessage(
       id: msgId,
       senderId: uid,
-      text: text,
+      text: prefixedText,
       timestamp: DateTime.now().millisecondsSinceEpoch,
       isStaff: true, // we are on the dashboard
     );
@@ -127,8 +138,21 @@ class _IncidentChatDialogState extends State<IncidentChatDialog> {
                       itemCount: _messages.length,
                       itemBuilder: (context, index) {
                         final msg = _messages[index];
-                        final alignRight = msg.isStaff;
+                        final label = widget.currentRole == UserRole.admin ? 'ADMIN' : (widget.teamId ?? widget.currentRole.name.toUpperCase());
+                        final alignRight = msg.isStaff; // Staff always on right for dashboard users
+                        final isMe = msg.isStaff && msg.text.startsWith('[$label]');
                         final timeString = DateTime.fromMillisecondsSinceEpoch(msg.timestamp).toString().substring(11, 16);
+                        
+                        String roleLabel = alignRight ? 'Staff' : 'Guest';
+                        String displayMsg = msg.text;
+                        
+                        if (alignRight) {
+                          final match = RegExp(r'^\[(.*?)\] (.*)').firstMatch(msg.text);
+                          if (match != null) {
+                            roleLabel = match.group(1)!;
+                            displayMsg = match.group(2)!;
+                          }
+                        }
                         
                         return Container(
                           margin: const EdgeInsets.only(bottom: 12),
@@ -143,9 +167,9 @@ class _IncidentChatDialogState extends State<IncidentChatDialog> {
                             child: Column(
                               crossAxisAlignment: alignRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                               children: [
-                                Text(alignRight ? 'Staff' : 'Guest', style: TextStyle(color: alignRight ? Colors.blue[200] : Colors.grey[400], fontSize: 10, fontWeight: FontWeight.bold)),
+                                Text(roleLabel, style: TextStyle(color: alignRight ? Colors.blue[200] : Colors.grey[400], fontSize: 10, fontWeight: FontWeight.bold)),
                                 const SizedBox(height: 4),
-                                Text(msg.text, style: const TextStyle(color: Colors.white)),
+                                Text(displayMsg, style: const TextStyle(color: Colors.white)),
                                 const SizedBox(height: 4),
                                 Text(timeString, style: const TextStyle(color: Colors.white54, fontSize: 10)),
                               ],
