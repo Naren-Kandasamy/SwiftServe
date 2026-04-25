@@ -119,4 +119,34 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get errorSendFailed => 'SOS भेजने में विफल। रिसेप्शन को कॉल करें।';
+
+  @override
+  String get guideFire => 'आग आपातकाल';
+
+  @override
+  String get guideMedical => 'चिकित्सा / सीपीआर';
+
+  @override
+  String get guideChoking => 'दम घुटना (हेमलिच)';
+
+  @override
+  String get guideCardiac => 'हृदय गति रुकना';
+
+  @override
+  String get guideWounds => 'गंभीर घाव';
+
+  @override
+  String get guideBurns => 'जलन';
+
+  @override
+  String get guideSecurity => 'सुरक्षा खतरा';
+
+  @override
+  String get guideGasLeak => 'गैस रिसाव';
+
+  @override
+  String get guideEarthquake => 'भूकंप';
+
+  @override
+  String get guideFlood => 'बाढ़';
 }

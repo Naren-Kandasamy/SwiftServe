@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared/models/alert.dart';
 import 'package:shared/models/incident.dart';
 import 'sos_screen.dart';
@@ -36,9 +37,12 @@ class _StatusScreenState extends State<StatusScreen> {
         .onValue
         .listen((event) {
       if (mounted && event.snapshot.value != null) {
-        setState(() {
-          _alert = Alert.fromMap(Map<dynamic, dynamic>.from(event.snapshot.value as Map));
-        });
+        final updatedAlert = Alert.fromMap(Map<dynamic, dynamic>.from(event.snapshot.value as Map));
+        setState(() => _alert = updatedAlert);
+        // Clear local session when the incident is resolved
+        if (updatedAlert.status == AlertStatus.resolved) {
+          SharedPreferences.getInstance().then((prefs) => prefs.remove('active_alert_id'));
+        }
       }
     });
   }
@@ -92,6 +96,39 @@ class _StatusScreenState extends State<StatusScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // Room Code Chip — always visible so guests/roommates can rejoin
+            if (_alert!.roomKey != null)
+              Container(
+                margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white12),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.vpn_key_outlined, color: Colors.white38, size: 16),
+                    const SizedBox(width: 10),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Room Code', style: TextStyle(color: Colors.white38, fontSize: 10, letterSpacing: 1)),
+                        FutureBuilder<String?>(
+                          future: SharedPreferences.getInstance().then((p) => p.getString('stay_token')),
+                          builder: (context, snap) => Text(
+                            snap.data?.split('').join(' ') ?? '------',
+                            style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: 4),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Spacer(),
+                    const Text('Share with roommates', style: TextStyle(color: Colors.white24, fontSize: 10)),
+                  ],
+                ),
+              ),
+
             // AI Instructions Header
             if (_alert!.safetyInstructions != null)
               Container(

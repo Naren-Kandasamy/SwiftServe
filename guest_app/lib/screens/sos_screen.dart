@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
@@ -13,6 +14,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:convert';
 import 'status_screen.dart';
+import 'rejoin_screen.dart';
 import 'knowledge_library_screen.dart';
 import 'package:shared/venue_config.dart';
 import '../services/connectivity_service.dart';
@@ -45,6 +47,9 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
   StreamSubscription<ConnectivityTier>? _tierSubscription;
   String _selectedFloor = VenueConfig.floors.first;
   String _selectedRoom = VenueConfig.roomsForFloor(VenueConfig.floors.first).first;
+  String? _stayRoom;         // The room the guest is actually staying in (Check-in)
+  String? _roomToken;        // The permanent token for their stay
+  bool _hasActiveAlert = false; 
 
   final List<Map<String, dynamic>> _emergencyTypes = [
     {'id': 'fire', 'icon': Icons.local_fire_department, 'color': Colors.orangeAccent},
@@ -82,6 +87,136 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
     
     // Check for local queue items on boot
     _syncLocalQueue();
+    _loadStayInfo();
+    _checkActiveAlert();
+  }
+
+  Future<void> _loadStayInfo() async {
+    final prefs = await SharedPreferences.getInstance();
+    final stayRoom = prefs.getString('stay_room');
+    final stayToken = prefs.getString('stay_token');
+
+    if (stayRoom != null && stayToken != null) {
+      setState(() {
+        _stayRoom = stayRoom;
+        _roomToken = stayToken;
+      });
+    } else {
+      // Prompt for check-in if not set
+      WidgetsBinding.instance.addPostFrameCallback((_) => _showCheckInDialog());
+    }
+  }
+
+  Future<void> _showCheckInDialog() async {
+    String tempFloor = VenueConfig.floors.first;
+    List<String> availableRooms = VenueConfig.roomsForFloor(tempFloor).where((r) => r.startsWith('Room')).toList();
+    String tempRoom = availableRooms.isNotEmpty ? availableRooms.first : 'Unknown';
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => AlertDialog(
+          backgroundColor: Colors.grey[900],
+          title: const Text('Welcome to Grand Horizon', style: TextStyle(color: Colors.white)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Please confirm your assigned room for this stay.', style: TextStyle(color: Colors.white70)),
+              const SizedBox(height: 20),
+              DropdownButtonFormField<String>(
+                value: tempFloor,
+                dropdownColor: Colors.grey[800],
+                style: const TextStyle(color: Colors.white),
+                items: VenueConfig.floors.map((f) => DropdownMenuItem(value: f, child: Text('Floor $f'))).toList(),
+                onChanged: (val) => setModalState(() {
+                  tempFloor = val!;
+                  availableRooms = VenueConfig.roomsForFloor(tempFloor).where((r) => r.startsWith('Room')).toList();
+                  if (availableRooms.isEmpty) availableRooms = ['Unknown'];
+                  tempRoom = availableRooms.first;
+                }),
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: tempRoom,
+                dropdownColor: Colors.grey[800],
+                style: const TextStyle(color: Colors.white),
+                items: availableRooms.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
+                onChanged: (val) => setModalState(() => tempRoom = val!),
+              ),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () async {
+                final prefs = await SharedPreferences.getInstance();
+                final roomKey = tempRoom.replaceAll(' ', '_');
+                
+                // Fetch or generate token for this stay
+                String? token;
+                try {
+                  final snap = await FirebaseDatabase.instance
+                      .ref('venues/mockVenue123/roomTokens/$roomKey')
+                      .get()
+                      .timeout(const Duration(seconds: 3));
+                  if (snap.exists) {
+                    token = snap.value.toString();
+                  }
+                } catch (_) {}
+
+                if (token == null) {
+                  token = _makeToken();
+                  try {
+                    await FirebaseDatabase.instance
+                        .ref('venues/mockVenue123/roomTokens/$roomKey')
+                        .set(token)
+                        .timeout(const Duration(seconds: 3));
+                  } catch (_) {}
+                }
+
+                await prefs.setString('stay_room', tempRoom);
+                await prefs.setString('stay_token', token);
+                
+                setState(() {
+                  _stayRoom = tempRoom;
+                  _roomToken = token;
+                  // Also default incident location to their room
+                  _selectedFloor = tempFloor;
+                  _selectedRoom = tempRoom;
+                });
+                
+                Navigator.pop(context);
+              },
+              child: const Text('Check In'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _makeToken() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    final rand = Random.secure();
+    return List.generate(6, (_) => chars[rand.nextInt(chars.length)]).join();
+  }
+
+  /// Check if there's still an unresolved alert session saved locally.
+  Future<void> _checkActiveAlert() async {
+    final prefs = await SharedPreferences.getInstance();
+    final alertId = prefs.getString('active_alert_id');
+    if (alertId == null) return;
+    try {
+      final snap = await FirebaseDatabase.instance
+          .ref('venues/mockVenue123/alerts/$alertId/status')
+          .get()
+          .timeout(const Duration(seconds: 3));
+      if (snap.exists && snap.value != 'resolved') {
+        if (mounted) setState(() => _hasActiveAlert = true);
+      } else {
+        await prefs.remove('active_alert_id');
+      }
+    } catch (_) { /* offline — keep banner just in case */ }
   }
 
   Future<void> _syncLocalQueue() async {
@@ -116,6 +251,15 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
     _pulseController.dispose();
     _descController.dispose();
     super.dispose();
+  }
+
+  Future<void> _resumeActiveAlert() async {
+    final prefs = await SharedPreferences.getInstance();
+    final alertId = prefs.getString('active_alert_id');
+    if (alertId == null || !mounted) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => StatusScreen(alertId: alertId)),
+    );
   }
 
   Future<void> _attachPhoto() async {
@@ -429,6 +573,62 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
                   ),
                 ),
 
+                // Room Code & Active Alert banners
+                if (_hasActiveAlert)
+                  GestureDetector(
+                    onTap: () => _resumeActiveAlert(),
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.orangeAccent),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.warning_amber_rounded, color: Colors.orangeAccent, size: 18),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              '⚠️ You have an active emergency. Tap to resume.',
+                              style: TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                if (_roomToken != null)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.vpn_key_outlined, color: Colors.white54, size: 18),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Your Room (${_stayRoom ?? '...'})', style: const TextStyle(color: Colors.white54, fontSize: 11, letterSpacing: 1)),
+                              Text(
+                                _roomToken?.split('').join(' ') ?? '------',
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20, letterSpacing: 4),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
                 // Location Selector Banner
                 InkWell(
                   onTap: _showLocationPicker,
@@ -442,14 +642,15 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.location_on, color: Colors.blueAccent, size: 20),
+                        const Icon(Icons.info_outline, color: Colors.blueAccent, size: 20),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            'Floor $_selectedFloor, Room $_selectedRoom', 
+                            'Reporting from: Floor $_selectedFloor, $_selectedRoom', 
                             style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)
                           ),
                         ),
+                        const Icon(Icons.edit, color: Colors.white38, size: 16),
                         const Text('CHANGE', style: TextStyle(color: Colors.blueAccent, fontSize: 12, fontWeight: FontWeight.bold)),
                       ],
                     ),
@@ -602,6 +803,16 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
                   'Hold connection for real-time status after triggering.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.white38, fontSize: 12),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const RejoinScreen()),
+                  ),
+                  child: const Text(
+                    'Already sent an SOS? Rejoin →',
+                    style: TextStyle(color: Colors.white30, fontSize: 12, decoration: TextDecoration.underline),
+                  ),
                 ),
                 const SizedBox(height: 10),
               ],
@@ -828,26 +1039,30 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
 
       final alert = Alert(
         id: alertId,
-        userId: FirebaseAuth.instance.currentUser?.uid ?? 'offline_user', // True Auth UUID
+        userId: FirebaseAuth.instance.currentUser?.uid ?? 'offline_user',
         venueId: 'mockVenue123',
         roomNumber: _selectedRoom,
         floor: int.tryParse(_selectedFloor) ?? 1,
         description: _descController.text,
-        imageUrl: _attachedImage != null ? 'pending_upload' : null, // Written immediately — image patches in below
+        imageUrl: _attachedImage != null ? 'pending_upload' : null,
         type: parsedType,
-        location: const GeoPoint(0.0, 0.0), // TODO: GPS
+        location: const GeoPoint(0.0, 0.0),
         timestamp: DateTime.now().millisecondsSinceEpoch,
         status: AlertStatus.pending,
         assignedTo: [],
+        roomKey: _roomToken, // Use the stay token for rejoin logic
       );
 
       if (_currentTier == ConnectivityTier.online) {
-        // Using .timeout so it doesn't hang forever on fake credentials
         await FirebaseDatabase.instance
             .ref()
             .child('venues/${alert.venueId}/alerts/$alertId')
             .set(alert.toMap())
             .timeout(const Duration(seconds: 15));
+
+        // Save active alert session
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('active_alert_id', alertId);
 
         if (!mounted) return;
         Navigator.of(context).pushReplacement(

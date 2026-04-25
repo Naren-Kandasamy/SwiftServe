@@ -36,5 +36,15 @@
   "offlineGuideTitle": "அவசரகால பாதுகாப்பு வழிகாட்டி",
   "errorGeneric": "ஏதோ தவறு நடந்தது. மீண்டும் முயற்சிக்கவும்.",
   "errorNoLocation": "உங்கள் இடத்தை தீர்மானிக்க முடியவில்லை.",
-  "errorSendFailed": "SOS அனுப்ப முடியவில்லை. வரவேற்பை அழைக்கவும்."
+  "errorSendFailed": "SOS அனுப்ப முடியவில்லை. வரவேற்பை அழைக்கவும்.",
+  "guideFire": "தீ அவசரநிலை",
+  "guideMedical": "மருத்துவ / CPR",
+  "guideChoking": "மூச்சுத் திணறல் (Heimlich)",
+  "guideCardiac": "மாரடைப்பு",
+  "guideWounds": "கடுமையான காயங்கள்",
+  "guideBurns": "தீக்காயங்கள்",
+  "guideSecurity": "பாதுகாப்பு அச்சுறுத்தல்",
+  "guideGasLeak": "எரிவாயு கசிவு",
+  "guideEarthquake": "நிலநடுக்கம்",
+  "guideFlood": "வெள்ளம்"
 }

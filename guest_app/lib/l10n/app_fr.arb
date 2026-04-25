@@ -36,5 +36,16 @@
   "offlineGuideTitle": "Guide de sécurité d'urgence",
   "errorGeneric": "Quelque chose s'est mal passé. Réessayez.",
   "errorNoLocation": "Impossible de déterminer votre emplacement.",
-  "errorSendFailed": "Échec de l'envoi du SOS. Appelez la réception."
+  "errorSendFailed": "Échec de l'envoi du SOS. Appelez la réception.",
+
+  "guideFire": "Incendie",
+  "guideMedical": "Médical / RCR",
+  "guideChoking": "Étouffement (Heimlich)",
+  "guideCardiac": "Arrêt cardiaque",
+  "guideWounds": "Blessures graves",
+  "guideBurns": "Brûlures",
+  "guideSecurity": "Menace de sécurité",
+  "guideGasLeak": "Fuite de gaz",
+  "guideEarthquake": "Tremblement de terre",
+  "guideFlood": "Inondation"
 }

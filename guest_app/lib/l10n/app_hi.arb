@@ -36,5 +36,15 @@
   "offlineGuideTitle": "आपातकालीन सुरक्षा गाइड",
   "errorGeneric": "कुछ गलत हो गया। कृपया पुनः प्रयास करें।",
   "errorNoLocation": "आपका स्थान निर्धारित नहीं हो सका।",
-  "errorSendFailed": "SOS भेजने में विफल। रिसेप्शन को कॉल करें।"
+  "errorSendFailed": "SOS भेजने में विफल। रिसेप्शन को कॉल करें।",
+  "guideFire": "आग आपातकाल",
+  "guideMedical": "चिकित्सा / सीपीआर",
+  "guideChoking": "दम घुटना (हेमलिच)",
+  "guideCardiac": "हृदय गति रुकना",
+  "guideWounds": "गंभीर घाव",
+  "guideBurns": "जलन",
+  "guideSecurity": "सुरक्षा खतरा",
+  "guideGasLeak": "गैस रिसाव",
+  "guideEarthquake": "भूकंप",
+  "guideFlood": "बाढ़"
 }

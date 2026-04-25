@@ -41,5 +41,16 @@
 
   "errorGeneric": "Something went wrong. Please try again.",
   "errorNoLocation": "Could not determine your location.",
-  "errorSendFailed": "Failed to send SOS. Please call reception."
+  "errorSendFailed": "Failed to send SOS. Please call reception.",
+
+  "guideFire": "Fire Emergency",
+  "guideMedical": "Medical / CPR",
+  "guideChoking": "Choking (Heimlich)",
+  "guideCardiac": "Cardiac Arrest",
+  "guideWounds": "Severe Wounds",
+  "guideBurns": "Burns",
+  "guideSecurity": "Security Threat",
+  "guideGasLeak": "Gas Leak",
+  "guideEarthquake": "Earthquake",
+  "guideFlood": "Flood"
 }

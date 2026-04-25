@@ -119,4 +119,34 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get errorSendFailed => 'SOS அனுப்ப முடியவில்லை. வரவேற்பை அழைக்கவும்.';
+
+  @override
+  String get guideFire => 'தீ அவசரநிலை';
+
+  @override
+  String get guideMedical => 'மருத்துவ / CPR';
+
+  @override
+  String get guideChoking => 'மூச்சுத் திணறல் (Heimlich)';
+
+  @override
+  String get guideCardiac => 'மாரடைப்பு';
+
+  @override
+  String get guideWounds => 'கடுமையான காயங்கள்';
+
+  @override
+  String get guideBurns => 'தீக்காயங்கள்';
+
+  @override
+  String get guideSecurity => 'பாதுகாப்பு அச்சுறுத்தல்';
+
+  @override
+  String get guideGasLeak => 'எரிவாயு கசிவு';
+
+  @override
+  String get guideEarthquake => 'நிலநடுக்கம்';
+
+  @override
+  String get guideFlood => 'வெள்ளம்';
 }

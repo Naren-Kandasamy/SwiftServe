@@ -1,24 +1,29 @@
 import 'package:flutter/material.dart';
+import '../l10n/app_localizations.dart';
 import '../services/offline_knowledge.dart';
 
 class KnowledgeLibraryScreen extends StatelessWidget {
   const KnowledgeLibraryScreen({super.key});
 
-  static const List<Map<String, dynamic>> _guides = [
-    {'title': 'Fire Emergency', 'icon': Icons.local_fire_department, 'path': 'assets/knowledge/fire.html'},
-    {'title': 'Medical / CPR', 'icon': Icons.medical_services, 'path': 'assets/knowledge/medical_cpr.html'},
-    {'title': 'Choking (Heimlich)', 'icon': Icons.restaurant, 'path': 'assets/knowledge/choking.html'},
-    {'title': 'Cardiac Arrest', 'icon': Icons.monitor_heart, 'path': 'assets/knowledge/cardiac.html'},
-    {'title': 'Severe Wounds', 'icon': Icons.healing, 'path': 'assets/knowledge/wounds.html'},
-    {'title': 'Burns', 'icon': Icons.thermostat, 'path': 'assets/knowledge/burns.html'},
-    {'title': 'Security Threat', 'icon': Icons.gavel, 'path': 'assets/knowledge/security.html'},
-    {'title': 'Gas Leak', 'icon': Icons.warning_amber, 'path': 'assets/knowledge/gas_leak.html'},
-    {'title': 'Earthquake', 'icon': Icons.landslide, 'path': 'assets/knowledge/earthquake.html'},
-    {'title': 'Flood', 'icon': Icons.water, 'path': 'assets/knowledge/flood.html'},
-  ];
+  List<Map<String, dynamic>> _getGuides(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return [
+      {'title': l10n.guideFire, 'icon': Icons.local_fire_department, 'path': 'assets/knowledge/fire.html'},
+      {'title': l10n.guideMedical, 'icon': Icons.medical_services, 'path': 'assets/knowledge/medical_cpr.html'},
+      {'title': l10n.guideChoking, 'icon': Icons.restaurant, 'path': 'assets/knowledge/choking.html'},
+      {'title': l10n.guideCardiac, 'icon': Icons.monitor_heart, 'path': 'assets/knowledge/cardiac.html'},
+      {'title': l10n.guideWounds, 'icon': Icons.healing, 'path': 'assets/knowledge/wounds.html'},
+      {'title': l10n.guideBurns, 'icon': Icons.thermostat, 'path': 'assets/knowledge/burns.html'},
+      {'title': l10n.guideSecurity, 'icon': Icons.gavel, 'path': 'assets/knowledge/security.html'},
+      {'title': l10n.guideGasLeak, 'icon': Icons.warning_amber, 'path': 'assets/knowledge/gas_leak.html'},
+      {'title': l10n.guideEarthquake, 'icon': Icons.landslide, 'path': 'assets/knowledge/earthquake.html'},
+      {'title': l10n.guideFlood, 'icon': Icons.water, 'path': 'assets/knowledge/flood.html'},
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
+    final guides = _getGuides(context);
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
@@ -55,9 +60,9 @@ class KnowledgeLibraryScreen extends StatelessWidget {
                   crossAxisSpacing: 12,
                   mainAxisSpacing: 12,
                 ),
-                itemCount: _guides.length,
+                itemCount: guides.length,
                 itemBuilder: (context, index) {
-                  final guide = _guides[index];
+                  final guide = guides[index];
                   return Material(
                     color: Colors.grey[900],
                     borderRadius: BorderRadius.circular(12),

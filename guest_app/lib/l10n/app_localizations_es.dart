@@ -118,4 +118,34 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get errorSendFailed => 'Error al enviar SOS. Llama a recepción.';
+
+  @override
+  String get guideFire => 'Incendio';
+
+  @override
+  String get guideMedical => 'Médica / RCP';
+
+  @override
+  String get guideChoking => 'Asfixia (Heimlich)';
+
+  @override
+  String get guideCardiac => 'Paro cardíaco';
+
+  @override
+  String get guideWounds => 'Heridas graves';
+
+  @override
+  String get guideBurns => 'Quemaduras';
+
+  @override
+  String get guideSecurity => 'Amenaza de seguridad';
+
+  @override
+  String get guideGasLeak => 'Fuga de gas';
+
+  @override
+  String get guideEarthquake => 'Terremoto';
+
+  @override
+  String get guideFlood => 'Inundación';
 }

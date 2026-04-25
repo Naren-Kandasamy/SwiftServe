@@ -325,6 +325,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Failed to send SOS. Please call reception.'**
   String get errorSendFailed;
+
+  /// No description provided for @guideFire.
+  ///
+  /// In en, this message translates to:
+  /// **'Fire Emergency'**
+  String get guideFire;
+
+  /// No description provided for @guideMedical.
+  ///
+  /// In en, this message translates to:
+  /// **'Medical / CPR'**
+  String get guideMedical;
+
+  /// No description provided for @guideChoking.
+  ///
+  /// In en, this message translates to:
+  /// **'Choking (Heimlich)'**
+  String get guideChoking;
+
+  /// No description provided for @guideCardiac.
+  ///
+  /// In en, this message translates to:
+  /// **'Cardiac Arrest'**
+  String get guideCardiac;
+
+  /// No description provided for @guideWounds.
+  ///
+  /// In en, this message translates to:
+  /// **'Severe Wounds'**
+  String get guideWounds;
+
+  /// No description provided for @guideBurns.
+  ///
+  /// In en, this message translates to:
+  /// **'Burns'**
+  String get guideBurns;
+
+  /// No description provided for @guideSecurity.
+  ///
+  /// In en, this message translates to:
+  /// **'Security Threat'**
+  String get guideSecurity;
+
+  /// No description provided for @guideGasLeak.
+  ///
+  /// In en, this message translates to:
+  /// **'Gas Leak'**
+  String get guideGasLeak;
+
+  /// No description provided for @guideEarthquake.
+  ///
+  /// In en, this message translates to:
+  /// **'Earthquake'**
+  String get guideEarthquake;
+
+  /// No description provided for @guideFlood.
+  ///
+  /// In en, this message translates to:
+  /// **'Flood'**
+  String get guideFlood;
 }
 
 class _AppLocalizationsDelegate
