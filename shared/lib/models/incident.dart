@@ -42,6 +42,7 @@ class Incident {
   String? imageUrl; // Optional image evidence
   String? requestedResolutionBy;
   List<String> assignedTeams; // IDs of teams assigned to this incident
+  String? responderPin; // 4-digit PIN for emergency services access
 
   Incident({
     required this.id,
@@ -59,6 +60,7 @@ class Incident {
     this.imageUrl,
     this.requestedResolutionBy,
     this.assignedTeams = const [],
+    this.responderPin,
   });
 
   factory Incident.fromMap(Map<dynamic, dynamic> map) {
@@ -84,6 +86,7 @@ class Incident {
       imageUrl: map['imageUrl'] as String?,
       requestedResolutionBy: map['requestedResolutionBy'] as String?,
       assignedTeams: (map['assignedTeams'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      responderPin: map['responderPin'] as String?,
     );
   }
 
@@ -99,11 +102,12 @@ class Incident {
       'status': status.name,
       'createdAt': createdAt,
       'resolvedAt': resolvedAt,
-      'timeline': timeline.map((x) => x.toMap()).toList(),
+      'timeline': timeline.map((u) => u.toMap()).toList(),
       'responderBriefUrl': responderBriefUrl,
       'imageUrl': imageUrl,
       'requestedResolutionBy': requestedResolutionBy,
       'assignedTeams': assignedTeams,
+      'responderPin': responderPin,
     };
   }
 }

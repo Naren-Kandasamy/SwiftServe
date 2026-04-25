@@ -78,7 +78,34 @@ class PdfService {
                   ],
                 ),
               ),
-              pw.SizedBox(height: 24),
+              pw.SizedBox(height: 16),
+              
+              if (incident.responderPin != null) ...[
+                pw.Container(
+                  width: double.infinity,
+                  padding: const pw.EdgeInsets.all(12),
+                  decoration: pw.BoxDecoration(
+                    color: PdfColors.orange100,
+                    border: pw.Border.all(color: PdfColors.orange800, width: 2),
+                    borderRadius: pw.BorderRadius.circular(8),
+                  ),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.center,
+                    children: [
+                      pw.Text(
+                        'LIVE INCIDENT PORTAL & CHAT',
+                        style: pw.TextStyle(color: PdfColors.orange900, fontWeight: pw.FontWeight.bold, fontSize: 14),
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Text(
+                        'URL: crisisnet.app/#/responder   |   ACCESS PIN: ${incident.responderPin}',
+                        style: pw.TextStyle(color: PdfColors.black, fontWeight: pw.FontWeight.bold, fontSize: 16),
+                      ),
+                    ],
+                  ),
+                ),
+                pw.SizedBox(height: 24),
+              ],
 
               // INCIDENT METADATA
               pw.Row(

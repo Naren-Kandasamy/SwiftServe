@@ -5,6 +5,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'firebase_options.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/responder_login_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,7 +34,10 @@ class CrisisNetDashboardApp extends StatelessWidget {
         fontFamily: 'Roboto',
       ),
       debugShowCheckedModeBanner: false,
-      home: const _AuthGate(),
+      routes: {
+        '/': (context) => const _AuthGate(),
+        '/responder': (context) => const ResponderLoginScreen(venueId: 'mockVenue123'),
+      },
     );
   }
 }

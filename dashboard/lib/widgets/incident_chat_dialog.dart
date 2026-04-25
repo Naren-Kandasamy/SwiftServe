@@ -97,13 +97,14 @@ class _IncidentChatDialogState extends State<IncidentChatDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.grey[900],
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: SizedBox(
-        width: 400,
-        height: 600,
-        child: Column(
+    return Container(
+      width: 400,
+      height: 600,
+      decoration: BoxDecoration(
+        color: Colors.grey[900],
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
           children: [
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -217,7 +218,6 @@ class _IncidentChatDialogState extends State<IncidentChatDialog> {
             ),
           ],
         ),
-      ),
     );
   }
 }

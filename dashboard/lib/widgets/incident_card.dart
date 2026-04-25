@@ -2,11 +2,15 @@ import 'package:flutter/material.dart';
 // ignore: avoid_web_libraries_in_flutter
 import 'dart:html' as html;
 import 'package:shared/models/incident.dart';
+import 'dart:math';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:shared/models/alert.dart';
 import '../services/pdf_service.dart';
 import 'incident_chat_dialog.dart';
 import 'internal_chat_dialog.dart';
 import 'timeline_entry.dart';
+import 'dart:math';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:shared/models/user.dart';
 
 class IncidentCard extends StatefulWidget {
@@ -193,6 +197,16 @@ class _IncidentCardState extends State<IncidentCard> {
                   onPressed: _isGenerating ? null : () async {
                     setState(() => _isGenerating = true);
                     try {
+                      // Ensure a Responder PIN exists before generating the brief
+                      String pin = widget.incidentData.responderPin ?? '';
+                      if (pin.isEmpty) {
+                        pin = (1000 + Random().nextInt(9000)).toString();
+                        await FirebaseDatabase.instance
+                            .ref('venues/${widget.incidentData.venueId}/incidents/${widget.incidentData.id}')
+                            .update({'responderPin': pin});
+                        widget.incidentData.responderPin = pin;
+                      }
+
                       final url = await PdfService.generateBriefUrl(widget.incidentData);
                       if (!mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -201,20 +215,21 @@ class _IncidentCardState extends State<IncidentCard> {
                           margin: EdgeInsets.only(bottom: MediaQuery.of(context).size.height - 150, left: 16, right: 16),
                           elevation: 10,
                           backgroundColor: Colors.green[800],
-                          duration: const Duration(seconds: 6),
+                          duration: const Duration(seconds: 10),
                           content: Row(
                             children: [
                               const Icon(Icons.check_circle, color: Colors.white, size: 18),
                               const SizedBox(width: 8),
-                              const Expanded(child: Text('Responder Brief ready!', style: TextStyle(color: Colors.white))),
+                              Expanded(child: Text('Responder Brief generated. PIN: $pin', style: const TextStyle(color: Colors.white))),
                               TextButton(
                                 onPressed: () {
-                                  html.window.navigator.clipboard?.writeText(url);
+                                  final text = 'Live Incident Portal: crisisnet.app/#/responder | PIN: $pin';
+                                  html.window.navigator.clipboard?.writeText(text);
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Link copied to clipboard')),
+                                    const SnackBar(content: Text('Portal instructions copied to clipboard')),
                                   );
                                 },
-                                child: const Text('COPY', style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold)),
+                                child: const Text('COPY LINK', style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold)),
                               ),
                               IconButton(
                                 icon: const Icon(Icons.close, color: Colors.white70, size: 18),
@@ -243,13 +258,32 @@ class _IncidentCardState extends State<IncidentCard> {
                   style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
                 ),
                 TextButton.icon(
+                  onPressed: () async {
+                    if (widget.incidentData.responderPin != null) {
+                      _showResponderPinDialog(widget.incidentData.responderPin!);
+                    } else {
+                      final pin = (1000 + Random().nextInt(9000)).toString();
+                      await FirebaseDatabase.instance
+                          .ref('venues/${widget.incidentData.venueId}/incidents/${widget.incidentData.id}')
+                          .update({'responderPin': pin});
+                      if (mounted) _showResponderPinDialog(pin);
+                    }
+                  },
+                  icon: const Icon(Icons.link, color: Colors.orangeAccent, size: 16),
+                  label: const Text('Responder Link', style: TextStyle(color: Colors.orangeAccent)),
+                  style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
+                ),
+                TextButton.icon(
                   onPressed: () {
                     showDialog(
                       context: context,
-                      builder: (context) => IncidentChatDialog(
-                        incident: widget.incidentData,
-                        currentRole: widget.currentRole,
-                        teamId: widget.currentRole == UserRole.admin ? 'ADMIN' : (widget.incidentData.assignedTeams.isNotEmpty ? widget.incidentData.assignedTeams.first : null),
+                      builder: (context) => Dialog(
+                        backgroundColor: Colors.transparent,
+                        child: IncidentChatDialog(
+                          incident: widget.incidentData,
+                          currentRole: widget.currentRole,
+                          teamId: widget.currentRole == UserRole.admin ? 'ADMIN' : (widget.incidentData.assignedTeams.isNotEmpty ? widget.incidentData.assignedTeams.first : null),
+                        ),
                       ),
                     );
                   },
@@ -390,6 +424,46 @@ class _IncidentCardState extends State<IncidentCard> {
             ],
           ],
         ),
+      ),
+    );
+  }
+
+  void _showResponderPinDialog(String pin) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: const Text('Responder Access', style: TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Give this PIN to Emergency Services (911):', style: TextStyle(color: Colors.white70)),
+            const SizedBox(height: 16),
+            Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.black,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orangeAccent, width: 2),
+                ),
+                child: Text(
+                  pin,
+                  style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.orangeAccent, letterSpacing: 8),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text('They can use this PIN at crisisnet.app/#/responder to view the live briefing and join the Guest Chat.', style: TextStyle(color: Colors.white54, fontSize: 12)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close', style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
   }
