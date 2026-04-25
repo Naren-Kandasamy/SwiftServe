@@ -115,7 +115,16 @@ class _ChatPanelState extends State<ChatPanel> {
                       final msg = _messages[index];
                       // Guests messages align right (they sent it), staff left
                       final alignRight = !msg.isStaff;
+                      final isResponder = msg.text.startsWith('[RESPONDER]');
                       
+                      String displayText = msg.text;
+                      if (msg.isStaff && msg.text.startsWith('[')) {
+                        final match = RegExp(r'^\[(.*?)\] (.*)').firstMatch(msg.text);
+                        if (match != null) {
+                          displayText = match.group(2)!;
+                        }
+                      }
+
                       return Container(
                         margin: const EdgeInsets.only(bottom: 8),
                         alignment: alignRight ? Alignment.centerRight : Alignment.centerLeft,
@@ -123,13 +132,21 @@ class _ChatPanelState extends State<ChatPanel> {
                           constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                           decoration: BoxDecoration(
-                            color: alignRight ? Colors.blue[900] : Colors.grey[800],
+                            color: isResponder ? Colors.orange[800] : (alignRight ? Colors.blue[900] : Colors.grey[800]),
                             borderRadius: BorderRadius.circular(16).copyWith(
                               bottomRight: alignRight ? const Radius.circular(0) : null,
                               bottomLeft: !alignRight ? const Radius.circular(0) : null,
                             ),
                           ),
-                          child: Text(msg.text, style: const TextStyle(color: Colors.white, fontSize: 13)),
+                          child: Column(
+                            crossAxisAlignment: alignRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                            children: [
+                              if (msg.isStaff)
+                                Text(isResponder ? 'EMERGENCY SERVICES' : 'STAFF', style: TextStyle(color: isResponder ? Colors.orange[200] : Colors.grey[400], fontSize: 10, fontWeight: FontWeight.bold)),
+                              if (msg.isStaff) const SizedBox(height: 2),
+                              Text(displayText, style: const TextStyle(color: Colors.white, fontSize: 13)),
+                            ],
+                          ),
                         ),
                       );
                     },
