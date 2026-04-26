@@ -163,6 +163,15 @@ class _IncidentCardState extends State<IncidentCard> {
                 const SizedBox(width: 4),
                 Text(roomNumber, style: const TextStyle(color: Colors.white70, fontSize: 14)),
                 const Spacer(),
+                if (widget.incidentData.roomKey != null) ...[
+                  const Icon(Icons.vpn_key, size: 14, color: Colors.blueAccent),
+                  const SizedBox(width: 4),
+                  Text(
+                    widget.incidentData.roomKey!.split('').join(' '),
+                    style: const TextStyle(color: Colors.blueAccent, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.1),
+                  ),
+                  const SizedBox(width: 12),
+                ],
                 const Icon(Icons.access_time, size: 14, color: Colors.white54),
                 const SizedBox(width: 4),
                 Text(time, style: const TextStyle(color: Colors.white70, fontSize: 14)),

@@ -42,6 +42,7 @@ class Incident {
   String? imageUrl; // Optional image evidence
   String? requestedResolutionBy;
   List<String> assignedTeams; // IDs of teams assigned to this incident
+  String? roomKey; // 6-char stay token for rejoin visibility
 
   Incident({
     required this.id,
@@ -59,6 +60,7 @@ class Incident {
     this.imageUrl,
     this.requestedResolutionBy,
     this.assignedTeams = const [],
+    this.roomKey,
   });
 
   factory Incident.fromMap(Map<dynamic, dynamic> map) {
@@ -84,6 +86,7 @@ class Incident {
       imageUrl: map['imageUrl'] as String?,
       requestedResolutionBy: map['requestedResolutionBy'] as String?,
       assignedTeams: (map['assignedTeams'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      roomKey: map['roomKey'] as String?,
     );
   }
 
@@ -104,6 +107,7 @@ class Incident {
       'imageUrl': imageUrl,
       'requestedResolutionBy': requestedResolutionBy,
       'assignedTeams': assignedTeams,
+      'roomKey': roomKey,
     };
   }
 }
