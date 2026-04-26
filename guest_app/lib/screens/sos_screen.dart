@@ -23,6 +23,9 @@ import '../services/ble_service.dart';
 import '../services/ble_scanner_service.dart';
 import '../services/sms_fallback.dart';
 import '../services/offline_knowledge.dart';
+import '../services/sync_service.dart';
+import '../services/model_manager.dart';
+import '../services/local_triage_service.dart';
 import '../main.dart' show appLocale;
 import '../l10n/app_localizations.dart';
 
@@ -44,7 +47,7 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
   bool _isSubmitting = false;
   double _soundLevel = 0.0;
   
-  ConnectivityTier _currentTier = ConnectivityTier.online;
+  ConnectivityTier _currentTier = ConnectivityService().currentTier;
   StreamSubscription<ConnectivityTier>? _tierSubscription;
   String _selectedFloor = VenueConfig.floors.first;
   String _selectedRoom = VenueConfig.roomsForFloor(VenueConfig.floors.first).first;
@@ -82,14 +85,66 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
     )..repeat(reverse: true);
 
     ConnectivityService().initialize();
+    ConnectivityService().forceUpdate(); // Force a fresh check immediately on entry
     _tierSubscription = ConnectivityService().tierStream.listen((tier) {
       if (mounted) setState(() => _currentTier = tier);
     });
     
-    // Check for local queue items on boot
-    _syncLocalQueue();
+    // Initialize Offline Services
+    SyncService().init();
+    ModelManager().init();
+
     _loadStayInfo();
     _checkActiveAlert();
+    
+    // Prompt for model download if not ready
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkModelReadiness());
+  }
+
+  Future<void> _checkModelReadiness() async {
+    if (!ModelManager().isModelReady.value && !ModelManager().isDownloading.value) {
+      // Small delay to let the UI settle
+      await Future.delayed(const Duration(seconds: 1));
+      if (!mounted) return;
+
+      final bool? wantDownload = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          backgroundColor: Colors.grey[900],
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.smart_toy, color: Colors.blueAccent),
+              SizedBox(width: 12),
+              Text('Offline Intelligence', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: const Text(
+            'To ensure life-saving instructions work without any internet connection, CrisisNet needs to download a compact, high-speed AI model (Qwen 0.5B).\n\nSize: ~390MB\nRecommended: Download on WiFi.',
+            style: TextStyle(color: Colors.white70, height: 1.4),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('LATER', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blueAccent,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('DOWNLOAD NOW', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+
+      if (wantDownload == true) {
+        ModelManager().downloadModel();
+      }
+    }
   }
 
   Future<void> _loadStayInfo() async {
@@ -220,31 +275,8 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
     } catch (_) { /* offline — keep banner just in case */ }
   }
 
-  Future<void> _syncLocalQueue() async {
-    if (_currentTier != ConnectivityTier.online) return;
-    final prefs = await SharedPreferences.getInstance();
-    final queue = prefs.getStringList('local_alerts') ?? [];
-    if (queue.isEmpty) return;
+  // Sync logic is now handled globally by SyncService
 
-    print('[SosScreen] Syncing ${queue.length} offline alerts to Firebase...');
-    final List<String> failed = [];
-    for (final jsonStr in queue) {
-      try {
-        final Map<String, dynamic> alertMap = Map<String, dynamic>.from(jsonDecode(jsonStr));
-        final alertId = alertMap['id'] as String;
-        final venueId = alertMap['venueId'] as String;
-        await FirebaseDatabase.instance
-            .ref('venues/$venueId/alerts/$alertId')
-            .set(alertMap)
-            .timeout(const Duration(seconds: 10));
-        print('[SosScreen] Synced offline alert $alertId successfully.');
-      } catch (e) {
-        print('[SosScreen] Failed to sync alert, keeping in queue: $e');
-        failed.add(jsonStr); // Keep failed ones for next attempt
-      }
-    }
-    await prefs.setStringList('local_alerts', failed);
-  }
 
   @override
   void dispose() {
@@ -540,50 +572,145 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
                   ),
                 ),
                 
-                // Connectivity Badge
+                // Connectivity & Sync Status
                 Center(
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _currentTier == ConnectivityTier.online 
-                          ? Colors.green.withValues(alpha: 0.2)
-                          : _currentTier == ConnectivityTier.limited 
-                              ? Colors.orange.withValues(alpha: 0.2)
-                              : Colors.red.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: _currentTier == ConnectivityTier.online 
-                          ? Colors.green 
-                          : _currentTier == ConnectivityTier.limited ? Colors.orange : Colors.red,
-                      )
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          _currentTier == ConnectivityTier.online 
-                            ? Icons.wifi 
-                            : _currentTier == ConnectivityTier.limited ? Icons.wifi_password : Icons.wifi_off,
-                          size: 14,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        decoration: BoxDecoration(
                           color: _currentTier == ConnectivityTier.online 
-                            ? Colors.green 
-                            : _currentTier == ConnectivityTier.limited ? Colors.orange : Colors.red,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          _currentTier.name.toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
+                              ? Colors.green.withValues(alpha: 0.2)
+                              : _currentTier == ConnectivityTier.limited 
+                                  ? Colors.orange.withValues(alpha: 0.2)
+                                  : Colors.red.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
                             color: _currentTier == ConnectivityTier.online 
                               ? Colors.green 
                               : _currentTier == ConnectivityTier.limited ? Colors.orange : Colors.red,
                           )
-                        )
-                      ],
-                    ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _currentTier == ConnectivityTier.online 
+                                ? Icons.wifi 
+                                : _currentTier == ConnectivityTier.limited ? Icons.wifi_password : Icons.wifi_off,
+                              size: 14,
+                              color: _currentTier == ConnectivityTier.online 
+                                ? Colors.green 
+                                : _currentTier == ConnectivityTier.limited ? Colors.orange : Colors.red,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              _currentTier.name.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: _currentTier == ConnectivityTier.online 
+                                  ? Colors.green 
+                                  : _currentTier == ConnectivityTier.limited ? Colors.orange : Colors.red,
+                              )
+                            )
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Background Sync Indicator
+                      ValueListenableBuilder<int>(
+                        valueListenable: SyncService().pendingSyncCount,
+                        builder: (context, count, _) {
+                          if (count == 0) return const SizedBox.shrink();
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.blueAccent.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: Colors.blueAccent),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.sync, color: Colors.blueAccent, size: 12),
+                                const SizedBox(width: 4),
+                                Text('$count PENDING', style: const TextStyle(color: Colors.blueAccent, fontSize: 9, fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ],
                   ),
+                ),
+                const SizedBox(height: 12),
+
+                // Model Download Progress Overlay
+                ValueListenableBuilder<bool>(
+                  valueListenable: ModelManager().isDownloading,
+                  builder: (context, downloading, _) {
+                    if (!downloading) {
+                      // Show trigger if model not ready and we are online
+                      return ValueListenableBuilder<bool>(
+                        valueListenable: ModelManager().isModelReady,
+                        builder: (context, ready, _) {
+                          if (ready || _currentTier != ConnectivityTier.online) return const SizedBox.shrink();
+                          return GestureDetector(
+                            onTap: () => ModelManager().downloadModel(),
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.5)),
+                              ),
+                              child: const Row(
+                                children: [
+                                  Icon(Icons.download, color: Colors.blueAccent, size: 16),
+                                  SizedBox(width: 12),
+                                  Expanded(child: Text('Tap to Download Qwen 0.5B Offline AI (~390MB)', style: TextStyle(color: Colors.blueAccent, fontSize: 12, fontWeight: FontWeight.bold))),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    }
+                    return ValueListenableBuilder<double>(
+                      valueListenable: ModelManager().downloadProgress,
+                      builder: (context, progress, _) {
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.blueAccent.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text('Syncing AI Knowledge...', style: TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                                  Text('${(progress * 100).toInt()}%', style: const TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              LinearProgressIndicator(
+                                value: progress,
+                                backgroundColor: Colors.white12,
+                                color: Colors.blueAccent,
+                                minHeight: 4,
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+                    );
+                  },
                 ),
 
                 // Room Code & Active Alert banners
@@ -1080,93 +1207,102 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
         medicalInfo: medicalInfo,
       );
 
+      bool pushedOnline = false;
       if (_currentTier == ConnectivityTier.online) {
-        await FirebaseDatabase.instance
-            .ref()
-            .child('venues/${alert.venueId}/alerts/$alertId')
-            .set(alert.toMap())
-            .timeout(const Duration(seconds: 15));
+        try {
+          await FirebaseDatabase.instance
+              .ref()
+              .child('venues/${alert.venueId}/alerts/$alertId')
+              .set(alert.toMap())
+              .timeout(const Duration(seconds: 6));
+          
+          pushedOnline = true;
 
-        // Save active alert session
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('active_alert_id', alertId);
+          // Save active alert session
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('active_alert_id', alertId);
 
+          if (!mounted) return;
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (context) => StatusScreen(alertId: alertId),
+            ),
+          );
+
+          // Background image upload
+          if (_attachedImage != null) {
+            Future(() async {
+              try {
+                final bytes = await _attachedImage!.readAsBytes();
+                final base64String = base64Encode(bytes);
+                await FirebaseDatabase.instance
+                    .ref('venues/${alert.venueId}/alerts/$alertId')
+                    .update({'imageUrl': 'data:image/jpeg;base64,$base64String'});
+              } catch (_) {}
+            });
+          }
+        } catch (e) {
+          debugPrint('[SosScreen] Online push failed, falling back to offline protocol: $e');
+          pushedOnline = false;
+        }
+      }
+
+      if (!pushedOnline) {
+        // TIER 2-4 OFFLINE AI & SYNC FLOW
+        debugPrint('[SosScreen] Device Offline or Push Failed. Triggering Offline Protocol...');
+        
+        Map<String, dynamic> triageResult = {
+          'content': 'Emergency registered locally. Please stay safe and wait for instructions.',
+          'type': parsedType.name,
+          'source': TriageSource.local,
+        };
+
+        // Trigger background services asynchronously to prevent UI lag
+        Future(() async {
+          try {
+            await SyncService().queueAlert(alert);
+            BleService().startMeshAdvertising(alert);
+            BleScannerService().startScanning(venueId: alert.venueId);
+          } catch (e) {
+            debugPrint('[SosScreen] Background services warned: $e');
+          }
+        });
+
+        // 2. Local AI Triage (Tier 2-4)
+        final triageService = LocalTriageService(apiKey: 'AIzaSyCF6-JpASJrVHtXiUccpSsz_FpkngG_22w'); 
+        final localResult = await triageService.processEmergency(alert.description);
+        triageResult = localResult;
+        
+        // Update alert with offline triage results
+        alert.safetyInstructions = localResult['content'];
+        alert.severity = localResult['severity'];
+        alert.type = EmergencyType.values.firstWhere(
+          (e) => e.name == localResult['type'], 
+          orElse: () => EmergencyType.other
+        );
+        alert.status = AlertStatus.triaged;
+        
+        // 5. Open Status Screen immediately
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('active_alert_id', alertId);
+        } catch (_) {}
+        
         if (!mounted) return;
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
-            builder: (context) => StatusScreen(alertId: alertId),
+            builder: (context) => StatusScreen(
+              alertId: alertId, 
+              offlineAlert: alert,
+              aiSource: (triageResult['source'] as TriageSource).label,
+            ),
           ),
         );
-
-        // Background image upload — fires AFTER navigation so guest isn't blocked
-        // TriageService polls up to 6s for imageUrl to appear before calling Gemini
-        if (_attachedImage != null) {
-          Future(() async {
-            try {
-              final bytes = await _attachedImage!.readAsBytes();
-              final base64String = base64Encode(bytes);
-              final String dataUrl = 'data:image/jpeg;base64,$base64String';
-              
-              await FirebaseDatabase.instance
-                  .ref('venues/${alert.venueId}/alerts/$alertId')
-                  .update({'imageUrl': dataUrl});
-              debugPrint('[SosScreen] Base64 Image converted + patched into alert: $alertId');
-            } catch (e) {
-              debugPrint('[SosScreen] Background base64 image encoding failed (non-fatal): $e');
-            }
-          });
-        }
-      } else {
-        // TIER 2-4 DEGRADATION FLOW
-        print('[SosScreen] Device Offline/Limited. Triggering Fallback Protocol...');
-        
-        // 1. Save to Local Queue
-        final prefs = await SharedPreferences.getInstance();
-        final queue = prefs.getStringList('local_alerts') ?? [];
-        queue.add(jsonEncode(alert.toMap()));
-        await prefs.setStringList('local_alerts', queue);
-        
-        // 2. Start BLE Mesh Peripheral (advertise alert as beacon)
-        await BleService().startMeshAdvertising(alert);
-        
-        // Also start scanning — this device becomes a relay node in the mesh
-        // It will pick up and retransmit beacons from other nearby devices
-        BleScannerService().startScanning(venueId: alert.venueId);
-        
-        // 3. SMS Fallback Prompt
-        bool? useSms = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            backgroundColor: Colors.grey[900],
-            title: const Text('Connection Lost', style: TextStyle(color: Colors.orangeAccent)),
-            content: const Text(
-              'We could not reach the server. We are broadcasting your alert locally via Bluetooth.\n\nWould you also like to send an emergency SMS to the staff?',
-              style: TextStyle(color: Colors.white70),
-            ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('NO, JUST BLE')),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-                onPressed: () => Navigator.pop(context, true), 
-                child: const Text('SEND SMS')
-              ),
-            ],
-          )
-        );
-        
-        if (useSms == true) {
-          await SmsFallbackService.sendSmsAlert(alert);
-        }
-        
-        // 4. Open Offline Knowledge Base regardless of SMS choice
-        if (mounted) {
-           OfflineKnowledgeService.showKnowledgeScreen(context, parsedType);
-        }
       }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to send SOS: Time out or config missing. Check your credentials.'), backgroundColor: Colors.red),
+        SnackBar(content: Text('SOS Failed Critical Error: $e'), backgroundColor: Colors.red),
       );
     } finally {
       if (mounted) {

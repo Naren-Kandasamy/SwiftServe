@@ -7,10 +7,19 @@ import 'package:shared/models/incident.dart';
 import 'sos_screen.dart';
 import 'chat_panel.dart';
 import '../l10n/app_localizations.dart';
+import '../services/offline_knowledge.dart';
 
 class StatusScreen extends StatefulWidget {
   final String alertId;
-  const StatusScreen({super.key, required this.alertId});
+  final Alert? offlineAlert;
+  final String? aiSource;
+
+  const StatusScreen({
+    super.key, 
+    required this.alertId,
+    this.offlineAlert,
+    this.aiSource,
+  });
 
   @override
   State<StatusScreen> createState() => _StatusScreenState();
@@ -27,6 +36,9 @@ class _StatusScreenState extends State<StatusScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.offlineAlert != null) {
+      _alert = widget.offlineAlert;
+    }
     _listenToAlert();
     _listenToIncident();
   }
@@ -149,18 +161,72 @@ class _StatusScreenState extends State<StatusScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Row(
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Icon(Icons.smart_toy, color: Colors.redAccent, size: 20),
-                        SizedBox(width: 8),
-                        Text('AI SAFETY INSTRUCTIONS', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                        const Row(
+                          children: [
+                            Icon(Icons.smart_toy, color: Colors.redAccent, size: 20),
+                            SizedBox(width: 8),
+                            Text('AI SAFETY INSTRUCTIONS', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                          ],
+                        ),
+                        if (widget.aiSource != null)
+                          Text(
+                            'Source: ${widget.aiSource}',
+                            style: const TextStyle(color: Colors.white24, fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
                       ],
                     ),
                     const SizedBox(height: 12),
-                    Text(
-                      _alert!.safetyInstructions!,
-                      style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.4),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 250),
+                      child: SingleChildScrollView(
+                        child: Text(
+                          _alert!.safetyInstructions!,
+                          style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.4),
+                        ),
+                      ),
                     ),
+                    
+                    // High-Fidelity Guide Trigger
+                    if (widget.offlineAlert != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red[800],
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          icon: const Icon(Icons.menu_book, size: 20),
+                          label: const Text('VIEW HIGH-FIDELITY OFFLINE GUIDE', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                          onPressed: () {
+                            final assetPath = OfflineKnowledgeService.getAssetPath(_alert!.type ?? EmergencyType.other);
+                            OfflineKnowledgeService.showCustomKnowledgeScreen(
+                              context, 
+                              '${(_alert!.type ?? EmergencyType.other).name.toUpperCase()} PROTOCOL', 
+                              assetPath
+                            );
+                          },
+                        ),
+                      ),
+
+                    if (widget.offlineAlert != null)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 12),
+                        child: Row(
+                          children: [
+                            Icon(Icons.cloud_off, color: Colors.orangeAccent, size: 14),
+                            SizedBox(width: 8),
+                            Text(
+                              'Offline Mode: Alert will sync when online.',
+                              style: TextStyle(color: Colors.orangeAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ),
                   ],
                 ),
               )

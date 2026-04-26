@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 enum ConnectivityTier { online, limited, offline }
@@ -32,6 +33,12 @@ class ConnectivityService {
     _connectivity.checkConnectivity().then(_handleConnectivityResults);
   }
 
+  /// Manually triggers a re-evaluation of the connectivity tier.
+  Future<void> forceUpdate() async {
+    final results = await _connectivity.checkConnectivity();
+    await _handleConnectivityResults(results);
+  }
+
   Future<void> _handleConnectivityResults(List<ConnectivityResult> results) async {
     if (results.contains(ConnectivityResult.none)) {
       _updateTier(ConnectivityTier.offline);
@@ -59,12 +66,20 @@ class ConnectivityService {
   }
 
   Future<bool> _canReachFirebase() async {
-    if (kIsWeb) return true;
     try {
-      // Simple ping to Google DNS to represent internet reachability
-      // In a real app, this would ping a specific Firebase endpoint or check FB connection status
-      final result = await InternetAddress.lookup('8.8.8.8').timeout(const Duration(seconds: 3));
-      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+      if (kIsWeb) {
+        // Use a lightweight check for Web
+        final dio = Dio();
+        final response = await dio.head(
+          'https://www.google.com',
+          options: Options(receiveTimeout: const Duration(seconds: 2), sendTimeout: const Duration(seconds: 1)),
+        );
+        return response.statusCode == 200;
+      } else {
+        // Simple ping to Google DNS for Mobile
+        final result = await InternetAddress.lookup('8.8.8.8').timeout(const Duration(seconds: 3));
+        return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+      }
     } catch (_) {
       return false;
     }

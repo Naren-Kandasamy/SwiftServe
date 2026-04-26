@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared/models/alert.dart';
 import 'package:intl/intl.dart';
 import 'status_screen.dart';
+import '../services/sync_service.dart';
 
 class RejoinScreen extends StatefulWidget {
   const RejoinScreen({super.key});
@@ -36,64 +37,66 @@ class _RejoinScreenState extends State<RejoinScreen> {
       _foundAlerts = [];
     });
 
+    final Map<String, Alert> mergedAlerts = {};
+
+    // --- SOURCE 1: Firebase (online alerts) ---
     try {
-      debugPrint('[RejoinScreen] Searching for token: "$token"');
+      debugPrint('[RejoinScreen] Searching Firebase for token: "$token"');
       final alertsSnap = await FirebaseDatabase.instance
           .ref('venues/mockVenue123/alerts')
           .get()
           .timeout(const Duration(seconds: 5));
 
-      if (!alertsSnap.exists) {
-        debugPrint('[RejoinScreen] No alerts node found in Firebase.');
-        setState(() { _isSearching = false; _errorMessage = 'No active emergency found for this room code.'; });
-        return;
-      }
-
-      final List<Alert> activeAlerts = [];
-      final alertsMap = Map<String, dynamic>.from(alertsSnap.value as Map);
-      debugPrint('[RejoinScreen] Found ${alertsMap.length} total alerts in Firebase.');
-
-      alertsMap.forEach((alertId, alertData) {
-        try {
-          final alertMap = Map<dynamic, dynamic>.from(alertData as Map);
-          final String? alertRoomKey = alertMap['roomKey']?.toString();
-          final String? alertStatus = alertMap['status']?.toString();
-          
-          debugPrint('[RejoinScreen] Checking alert $alertId -> roomKey: "$alertRoomKey", status: "$alertStatus"');
-          
-          // Only check roomKey manually first to bypass parsing issues
-          if (alertRoomKey == token && alertStatus != 'resolved') {
-            debugPrint('[RejoinScreen] Match found! Parsing alert $alertId...');
-            final alert = Alert.fromMap(alertMap);
-            activeAlerts.add(alert);
+      if (alertsSnap.exists) {
+        final alertsMap = Map<String, dynamic>.from(alertsSnap.value as Map);
+        alertsMap.forEach((alertId, alertData) {
+          try {
+            final alertMap = Map<dynamic, dynamic>.from(alertData as Map);
+            final String? alertRoomKey = alertMap['roomKey']?.toString();
+            final String? alertStatus = alertMap['status']?.toString();
+            if (alertRoomKey == token && alertStatus != 'resolved') {
+              final alert = Alert.fromMap(alertMap);
+              mergedAlerts[alert.id] = alert;
+            }
+          } catch (e) {
+            debugPrint('[RejoinScreen] Error parsing Firebase alert $alertId: $e');
           }
-        } catch (e) {
-          debugPrint('[RejoinScreen] Error parsing alert $alertId: $e');
-        }
-      });
-
-      debugPrint('[RejoinScreen] Total active alerts for token "$token": ${activeAlerts.length}');
-
-      if (activeAlerts.isEmpty) {
-        setState(() { _isSearching = false; _errorMessage = 'No active emergency found for this room code.'; });
-        return;
-      }
-
-      // Sort newest first
-      activeAlerts.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-
-      if (activeAlerts.length == 1) {
-        // Only one active alert, jump directly to it
-        await _selectAlert(activeAlerts.first);
-      } else {
-        // Multiple alerts, display the list
-        setState(() {
-          _isSearching = false;
-          _foundAlerts = activeAlerts;
         });
       }
     } catch (e) {
-      setState(() { _isSearching = false; _errorMessage = 'Could not connect. Please check your connection.'; });
+      debugPrint('[RejoinScreen] Firebase search failed (may be offline): $e');
+    }
+
+    // --- SOURCE 2: Local Offline Queue (unsynced alerts) ---
+    try {
+      final queued = await SyncService().getQueuedAlerts();
+      for (final alert in queued) {
+        if (alert.roomKey == token && alert.status != AlertStatus.resolved) {
+          mergedAlerts[alert.id] = alert; // overwrite with local version if duplicate
+        }
+      }
+      debugPrint('[RejoinScreen] Found ${queued.length} locally queued alerts.');
+    } catch (e) {
+      debugPrint('[RejoinScreen] Local queue search failed: $e');
+    }
+
+    final activeAlerts = mergedAlerts.values.toList()
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+    debugPrint('[RejoinScreen] Total alerts found for "$token": ${activeAlerts.length}');
+
+    if (activeAlerts.isEmpty) {
+      setState(() { _isSearching = false; _errorMessage = 'No active emergency found for this room code. If you submitted offline, it will appear here once synced.'; });
+      return;
+    }
+
+    if (activeAlerts.length == 1) {
+      await _selectAlert(activeAlerts.first);
+    } else {
+      setState(() {
+        _isSearching = false;
+        _foundAlerts = activeAlerts;
+      });
     }
   }
 
