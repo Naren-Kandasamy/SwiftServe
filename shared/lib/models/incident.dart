@@ -39,6 +39,7 @@ class Incident {
   int? resolvedAt;
   List<IncidentUpdate> timeline; // chronological log of all updates
   String? responderBriefUrl;
+  String? imageUrl; // Optional image evidence
 
   Incident({
     required this.id,
@@ -53,6 +54,7 @@ class Incident {
     this.resolvedAt,
     required this.timeline,
     this.responderBriefUrl,
+    this.imageUrl,
   });
 
   factory Incident.fromMap(Map<dynamic, dynamic> map) {
@@ -75,6 +77,7 @@ class Incident {
       resolvedAt: map['resolvedAt'] as int?,
       timeline: (map['timeline'] as List<dynamic>?)?.map((e) => IncidentUpdate.fromMap(e as Map<dynamic, dynamic>)).toList() ?? [],
       responderBriefUrl: map['responderBriefUrl'] as String?,
+      imageUrl: map['imageUrl'] as String?,
     );
   }
 
@@ -92,6 +95,7 @@ class Incident {
       'resolvedAt': resolvedAt,
       'timeline': timeline.map((x) => x.toMap()).toList(),
       'responderBriefUrl': responderBriefUrl,
+      'imageUrl': imageUrl,
     };
   }
 }

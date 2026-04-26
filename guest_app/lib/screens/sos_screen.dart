@@ -1,13 +1,25 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:uuid/uuid.dart';
 import 'package:shared/models/alert.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:convert';
 import 'status_screen.dart';
+import 'knowledge_library_screen.dart';
 import 'package:shared/venue_config.dart';
+import '../services/connectivity_service.dart';
+import '../services/ble_service.dart';
+import '../services/ble_scanner_service.dart';
+import '../services/sms_fallback.dart';
+import '../services/offline_knowledge.dart';
 
 class SosScreen extends StatefulWidget {
   const SosScreen({super.key});
@@ -27,6 +39,8 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
   bool _isSubmitting = false;
   double _soundLevel = 0.0;
   
+  ConnectivityTier _currentTier = ConnectivityTier.online;
+  StreamSubscription<ConnectivityTier>? _tierSubscription;
   String _selectedFloor = VenueConfig.floors.first;
   String _selectedRoom = VenueConfig.roomsForFloor(VenueConfig.floors.first).first;
 
@@ -46,10 +60,45 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
+
+    ConnectivityService().initialize();
+    _tierSubscription = ConnectivityService().tierStream.listen((tier) {
+      if (mounted) setState(() => _currentTier = tier);
+    });
+    
+    // Check for local queue items on boot
+    _syncLocalQueue();
+  }
+
+  Future<void> _syncLocalQueue() async {
+    if (_currentTier != ConnectivityTier.online) return;
+    final prefs = await SharedPreferences.getInstance();
+    final queue = prefs.getStringList('local_alerts') ?? [];
+    if (queue.isEmpty) return;
+
+    print('[SosScreen] Syncing ${queue.length} offline alerts to Firebase...');
+    final List<String> failed = [];
+    for (final jsonStr in queue) {
+      try {
+        final Map<String, dynamic> alertMap = Map<String, dynamic>.from(jsonDecode(jsonStr));
+        final alertId = alertMap['id'] as String;
+        final venueId = alertMap['venueId'] as String;
+        await FirebaseDatabase.instance
+            .ref('venues/$venueId/alerts/$alertId')
+            .set(alertMap)
+            .timeout(const Duration(seconds: 10));
+        print('[SosScreen] Synced offline alert $alertId successfully.');
+      } catch (e) {
+        print('[SosScreen] Failed to sync alert, keeping in queue: $e');
+        failed.add(jsonStr); // Keep failed ones for next attempt
+      }
+    }
+    await prefs.setStringList('local_alerts', failed);
   }
 
   @override
   void dispose() {
+    _tierSubscription?.cancel();
     _pulseController.dispose();
     _descController.dispose();
     super.dispose();
@@ -57,7 +106,11 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
 
   Future<void> _attachPhoto() async {
     final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.camera);
+    final XFile? image = await picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 50,
+      maxWidth: 800,
+    );
     if (image != null) {
       setState(() {
         _attachedImage = image;
@@ -161,6 +214,16 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
 
   Future<void> _toggleListen() async {
     if (!_isListening) {
+      var status = await Permission.microphone.request();
+      if (status != PermissionStatus.granted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Microphone permission required.'), backgroundColor: Colors.red)
+          );
+        }
+        return;
+      }
+      
       bool available = await _speech.initialize(
         onStatus: (val) => print('onStatus: $val'),
         onError: (val) => print('onError: $val'),
@@ -205,20 +268,83 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16.0),
-                  child: Text(
-                    'CRISISNET',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 4.0,
-                    ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16.0),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      const Text(
+                        'CRISISNET',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 4.0,
+                        ),
+                      ),
+                      Positioned(
+                        right: 0,
+                        child: IconButton(
+                          icon: const Icon(Icons.menu_book, color: Colors.white70),
+                          tooltip: 'Offline Emergency Library',
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(builder: (_) => const KnowledgeLibraryScreen()),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 
+                // Connectivity Badge
+                Center(
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _currentTier == ConnectivityTier.online 
+                          ? Colors.green.withValues(alpha: 0.2)
+                          : _currentTier == ConnectivityTier.limited 
+                              ? Colors.orange.withValues(alpha: 0.2)
+                              : Colors.red.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: _currentTier == ConnectivityTier.online 
+                          ? Colors.green 
+                          : _currentTier == ConnectivityTier.limited ? Colors.orange : Colors.red,
+                      )
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _currentTier == ConnectivityTier.online 
+                            ? Icons.wifi 
+                            : _currentTier == ConnectivityTier.limited ? Icons.wifi_password : Icons.wifi_off,
+                          size: 14,
+                          color: _currentTier == ConnectivityTier.online 
+                            ? Colors.green 
+                            : _currentTier == ConnectivityTier.limited ? Colors.orange : Colors.red,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _currentTier.name.toUpperCase(),
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: _currentTier == ConnectivityTier.online 
+                              ? Colors.green 
+                              : _currentTier == ConnectivityTier.limited ? Colors.orange : Colors.red,
+                          )
+                        )
+                      ],
+                    ),
+                  ),
+                ),
+
                 // Location Selector Banner
                 InkWell(
                   onTap: _showLocationPicker,
@@ -416,7 +542,7 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOutCubic,
-          width: MediaQuery.of(context).size.width * 0.28,
+          width: (MediaQuery.of(context).size.width * 0.28).clamp(80.0, 110.0),
           height: 105,
           decoration: BoxDecoration(
             gradient: isSelected 
@@ -591,6 +717,16 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
       return; // Fallback to safe zero-action state if they reject
     }
 
+    // Request permissions for BLE Mesh / location tracking (Not supported on bare Web fallback)
+    if (!kIsWeb) {
+      await [
+        Permission.location,
+        Permission.bluetooth,
+        Permission.bluetoothAdvertise,
+        Permission.bluetoothConnect,
+      ].request();
+    }
+
     HapticFeedback.heavyImpact();
     setState(() => _isSubmitting = true);
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -598,17 +734,6 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
     try {
       final String alertId = const Uuid().v4();
       
-      String? finalImageUrl;
-      if (_attachedImage != null) {
-        try {
-          final ref = FirebaseStorage.instance.ref('venues/mockVenue123/alerts/images/$alertId');
-          await ref.putData(await _attachedImage!.readAsBytes());
-          finalImageUrl = await ref.getDownloadURL();
-        } catch (e) {
-          debugPrint('Failed to upload SOS photo: $e');
-        }
-      }
-
       EmergencyType parsedType = EmergencyType.values.firstWhere(
         (e) => e.name.toLowerCase() == _selectedEmergencyType?.toLowerCase(),
         orElse: () => EmergencyType.other,
@@ -616,12 +741,12 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
 
       final alert = Alert(
         id: alertId,
-        userId: 'mockUser99', // TODO: Firebase Auth UID
+        userId: FirebaseAuth.instance.currentUser?.uid ?? 'offline_user', // True Auth UUID
         venueId: 'mockVenue123',
         roomNumber: _selectedRoom,
         floor: int.tryParse(_selectedFloor) ?? 1,
         description: _descController.text,
-        imageUrl: finalImageUrl, 
+        imageUrl: _attachedImage != null ? 'pending_upload' : null, // Written immediately — image patches in below
         type: parsedType,
         location: const GeoPoint(0.0, 0.0), // TODO: GPS
         timestamp: DateTime.now().millisecondsSinceEpoch,
@@ -629,20 +754,86 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
         assignedTo: [],
       );
 
-      // Using .timeout so it doesn't hang forever on fake credentials
-      await FirebaseDatabase.instance
-          .ref()
-          .child('venues/${alert.venueId}/alerts/$alertId')
-          .set(alert.toMap())
-          .timeout(const Duration(seconds: 15));
+      if (_currentTier == ConnectivityTier.online) {
+        // Using .timeout so it doesn't hang forever on fake credentials
+        await FirebaseDatabase.instance
+            .ref()
+            .child('venues/${alert.venueId}/alerts/$alertId')
+            .set(alert.toMap())
+            .timeout(const Duration(seconds: 15));
 
-      if (!mounted) return;
-      
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (context) => StatusScreen(alertId: alertId),
-        ),
-      );
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => StatusScreen(alertId: alertId),
+          ),
+        );
+
+        // Background image upload — fires AFTER navigation so guest isn't blocked
+        // TriageService polls up to 6s for imageUrl to appear before calling Gemini
+        if (_attachedImage != null) {
+          Future(() async {
+            try {
+              final bytes = await _attachedImage!.readAsBytes();
+              final base64String = base64Encode(bytes);
+              final String dataUrl = 'data:image/jpeg;base64,$base64String';
+              
+              await FirebaseDatabase.instance
+                  .ref('venues/${alert.venueId}/alerts/$alertId')
+                  .update({'imageUrl': dataUrl});
+              debugPrint('[SosScreen] Base64 Image converted + patched into alert: $alertId');
+            } catch (e) {
+              debugPrint('[SosScreen] Background base64 image encoding failed (non-fatal): $e');
+            }
+          });
+        }
+      } else {
+        // TIER 2-4 DEGRADATION FLOW
+        print('[SosScreen] Device Offline/Limited. Triggering Fallback Protocol...');
+        
+        // 1. Save to Local Queue
+        final prefs = await SharedPreferences.getInstance();
+        final queue = prefs.getStringList('local_alerts') ?? [];
+        queue.add(jsonEncode(alert.toMap()));
+        await prefs.setStringList('local_alerts', queue);
+        
+        // 2. Start BLE Mesh Peripheral (advertise alert as beacon)
+        await BleService().startMeshAdvertising(alert);
+        
+        // Also start scanning — this device becomes a relay node in the mesh
+        // It will pick up and retransmit beacons from other nearby devices
+        BleScannerService().startScanning(venueId: alert.venueId);
+        
+        // 3. SMS Fallback Prompt
+        bool? useSms = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            backgroundColor: Colors.grey[900],
+            title: const Text('Connection Lost', style: TextStyle(color: Colors.orangeAccent)),
+            content: const Text(
+              'We could not reach the server. We are broadcasting your alert locally via Bluetooth.\n\nWould you also like to send an emergency SMS to the staff?',
+              style: TextStyle(color: Colors.white70),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('NO, JUST BLE')),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                onPressed: () => Navigator.pop(context, true), 
+                child: const Text('SEND SMS')
+              ),
+            ],
+          )
+        );
+        
+        if (useSms == true) {
+          await SmsFallbackService.sendSmsAlert(alert);
+        }
+        
+        // 4. Open Offline Knowledge Base regardless of SMS choice
+        if (mounted) {
+           OfflineKnowledgeService.showKnowledgeScreen(context, parsedType);
+        }
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

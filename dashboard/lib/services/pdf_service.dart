@@ -1,5 +1,7 @@
 // ignore: avoid_web_libraries_in_flutter
 import 'dart:html' as html;
+import 'dart:convert';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:shared/models/incident.dart';
@@ -13,6 +15,28 @@ class PdfService {
 
     final formatter = DateFormat('MMM dd, yyyy - HH:mm:ss');
     final creationTime = formatter.format(DateTime.fromMillisecondsSinceEpoch(incident.createdAt));
+
+    pw.MemoryImage? attachedImage;
+    if (incident.imageUrl != null && incident.imageUrl!.isNotEmpty) {
+      try {
+        print('[PdfService] Fetching image for PDF brief...');
+        if (incident.imageUrl!.startsWith('data:image')) {
+          final base64String = incident.imageUrl!.split(',').last;
+          final imageBytes = base64Decode(base64String);
+          attachedImage = pw.MemoryImage(imageBytes);
+          print('[PdfService] Successfully loaded Base64 image into PDF memory.');
+        } else {
+          final ref = FirebaseStorage.instance.refFromURL(incident.imageUrl!);
+          final imageBytes = await ref.getData(10 * 1024 * 1024); // 10MB limit
+          if (imageBytes != null) {
+            attachedImage = pw.MemoryImage(imageBytes);
+            print('[PdfService] Successfully loaded Firebase incident image into PDF memory.');
+          }
+        }
+      } catch (e) {
+        print('[PdfService] Failed to load incident image for PDF: $e');
+      }
+    }
 
     PdfColor severityColor;
     switch (incident.severity) {
@@ -123,6 +147,22 @@ class PdfService {
                       ),
                     ],
                   ),
+                ),
+                pw.SizedBox(height: 24),
+              ],
+
+              // EVIDENCE IMAGE
+              if (attachedImage != null) ...[
+                pw.Text(
+                  'ATTACHED EVIDENCE',
+                  style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColors.blueGrey800),
+                ),
+                pw.Divider(color: PdfColors.grey400),
+                pw.SizedBox(height: 8),
+                pw.Container(
+                  height: 200,
+                  alignment: pw.Alignment.centerLeft,
+                  child: pw.Image(attachedImage),
                 ),
                 pw.SizedBox(height: 24),
               ],

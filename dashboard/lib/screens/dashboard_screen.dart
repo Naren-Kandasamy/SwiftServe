@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:html' as html;
 import 'package:firebase_database/firebase_database.dart';
 import 'package:shared/models/alert.dart';
 import 'package:shared/models/incident.dart';
 import '../services/triage_service.dart';
 import '../widgets/incident_card.dart';
 import '../widgets/venue_map.dart';
+import 'analytics_screen.dart';
 
 // -----------------------------------------------------------------------------
 // DashboardScreen — CrisisNet Staff Command View
@@ -32,8 +35,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
+    _requestNotificationPermission();
     _subscribeToIncidents();
     _subscribeToAlerts();
+  }
+
+  void _requestNotificationPermission() {
+    try {
+      if (html.Notification.permission != 'granted') {
+        html.Notification.requestPermission();
+      }
+    } catch (_) {}
   }
 
   // ─── Firebase Listeners ────────────────────────────────────────────────────
@@ -157,6 +169,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  void _resolveIncident(String incidentId) async {
+    final index = _incidents.indexWhere((i) => i.id == incidentId);
+    if (index == -1) return;
+    
+    setState(() {
+      _incidents[index].status = IncidentStatus.resolved;
+      _incidents[index].resolvedAt = DateTime.now().millisecondsSinceEpoch;
+      _incidents[index].timeline.add(IncidentUpdate(
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+        updateText: 'Incident marked as Resolved by Admin.',
+      ));
+    });
+
+    try {
+      await FirebaseDatabase.instance
+          .ref('venues/$_venueId/incidents/$incidentId')
+          .update(_incidents[index].toMap());
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Incident resolved.')),
+        );
+      }
+    } catch (e) {
+      debugPrint('Failed to resolve incident: $e');
+    }
+  }
+
   // ─── Build ──────────────────────────────────────────────────────────────────
 
   @override
@@ -178,15 +217,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return textMatch && typeMatch;
     }).toList();
 
+    var activeIncidents = filteredIncidents.where((i) => i.status != IncidentStatus.resolved).toList();
+    var resolvedIncidents = filteredIncidents.where((i) => i.status == IncidentStatus.resolved).toList();
+
     if (_sortBy == 'severity') {
-      filteredIncidents.sort((a, b) => b.severity.compareTo(a.severity));
+      activeIncidents.sort((a, b) => b.severity.compareTo(a.severity));
+      resolvedIncidents.sort((a, b) => b.severity.compareTo(a.severity));
       filteredAlerts.sort((a, b) => (b.severity ?? 3).compareTo(a.severity ?? 3));
     } else {
-      filteredIncidents.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      activeIncidents.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      resolvedIncidents.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       filteredAlerts.sort((a, b) => b.timestamp.compareTo(a.timestamp));
     }
 
-    final int totalCount = _incidents.length + _rawAlerts.length;
+    final int totalCount = activeIncidents.length + _rawAlerts.length;
 
     return Scaffold(
       appBar: AppBar(
@@ -208,14 +252,59 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             const SizedBox(width: 16),
             IconButton(
+              icon: const Icon(Icons.analytics, color: Colors.blueAccent),
+              tooltip: 'View Performance Analytics',
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AnalyticsScreen()),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
               icon: const Icon(Icons.delete_forever, color: Colors.redAccent),
               tooltip: 'Clear Database',
               onPressed: _clearDatabase,
             ),
             const SizedBox(width: 8),
-            const CircleAvatar(
-              backgroundColor: Colors.grey,
-              child: Icon(Icons.person, color: Colors.white),
+            PopupMenuButton<String>(
+              offset: const Offset(0, 45),
+              color: Colors.grey[900],
+              icon: const CircleAvatar(
+                backgroundColor: Colors.grey,
+                child: Icon(Icons.person, color: Colors.white),
+              ),
+              onSelected: (value) {
+                if (value == 'logout') {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Logging out...')),
+                  );
+                } else if (value == 'settings') {
+                  showDialog(
+                    context: context,
+                    builder: (context) => const StaffProfileDialog(initialTab: 1),
+                  );
+                } else if (value == 'profile') {
+                  showDialog(
+                    context: context,
+                    builder: (context) => const StaffProfileDialog(initialTab: 0),
+                  );
+                }
+              },
+              itemBuilder: (BuildContext context) => [
+                const PopupMenuItem(
+                  value: 'profile',
+                  child: Row(children: [Icon(Icons.badge, color: Colors.white), SizedBox(width: 8), Text('Admin Profile', style: TextStyle(color: Colors.white))]),
+                ),
+                const PopupMenuItem(
+                  value: 'settings',
+                  child: Row(children: [Icon(Icons.settings, color: Colors.white), SizedBox(width: 8), Text('System Settings', style: TextStyle(color: Colors.white))]),
+                ),
+                const PopupMenuDivider(),
+                const PopupMenuItem(
+                  value: 'logout',
+                  child: Row(children: [Icon(Icons.logout, color: Colors.redAccent), SizedBox(width: 8), Text('Sign Out', style: TextStyle(color: Colors.redAccent))]),
+                ),
+              ],
             ),
           ],
         ),
@@ -300,7 +389,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     padding: EdgeInsets.zero,
                     children: [
                       // ── Triaged Incidents section ───────────────────────────--
-                      if (filteredIncidents.isNotEmpty) ...[
+                      if (activeIncidents.isNotEmpty) ...[
                         const Padding(
                           padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
                           child: Text(
@@ -308,10 +397,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             style: TextStyle(color: Colors.white54, fontWeight: FontWeight.bold, letterSpacing: 1.2, fontSize: 11),
                           ),
                         ),
-                        ...filteredIncidents.map((incident) => IncidentCard(
+                        ...activeIncidents.map((incident) => IncidentCard(
                           incidentData: incident,
                           onAssign: () => _showAssignDialog(context, incident.id),
                           onEscalate: () => _escalateIncident(incident.id),
+                          onResolve: () => _resolveIncident(incident.id),
+                        )),
+                      ],
+
+                      // ── Resolved Incidents section ──────────────────────────
+                      if (resolvedIncidents.isNotEmpty) ...[
+                        const Padding(
+                          padding: EdgeInsets.fromLTRB(16, 24, 16, 4),
+                          child: Text(
+                            'RESOLVED',
+                            style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, letterSpacing: 1.2, fontSize: 11),
+                          ),
+                        ),
+                        ...resolvedIncidents.map((incident) => Opacity(
+                          opacity: 0.6,
+                          child: IncidentCard(
+                            incidentData: incident,
+                            onAssign: () {},
+                            onEscalate: () {},
+                            onResolve: () {}, // Already resolved
+                          ),
                         )),
                       ],
 
@@ -328,7 +438,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ],
 
                       // ── Empty state ─────────────────────────────────────────
-                      if (filteredIncidents.isEmpty && filteredAlerts.isEmpty)
+                      if (activeIncidents.isEmpty && resolvedIncidents.isEmpty && filteredAlerts.isEmpty)
                         SizedBox(
                           height: 400,
                           child: Center(
@@ -515,6 +625,137 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         );
       },
+    );
+  }
+}
+
+class StaffProfileDialog extends StatefulWidget {
+  final int initialTab;
+  const StaffProfileDialog({super.key, this.initialTab = 0});
+
+  @override
+  State<StaffProfileDialog> createState() => _StaffProfileDialogState();
+}
+
+class _StaffProfileDialogState extends State<StaffProfileDialog> {
+  late int _selectedTab;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedTab = widget.initialTab;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: const Color(0xFF1E1E2C),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: SizedBox(
+        width: 600,
+        height: 400,
+        child: Row(
+          children: [
+            // Sidebar
+            Container(
+              width: 150,
+              decoration: BoxDecoration(
+                color: Colors.black26,
+                border: Border(right: BorderSide(color: Colors.white12)),
+              ),
+              child: Column(
+                children: [
+                  const SizedBox(height: 20),
+                  const CircleAvatar(
+                    radius: 30,
+                    backgroundColor: Colors.blueAccent,
+                    child: Icon(Icons.person, size: 30, color: Colors.white),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text('Admin', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  const Text('Command Center', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                  const SizedBox(height: 20),
+                  ListTile(
+                    selected: _selectedTab == 0,
+                    selectedTileColor: Colors.blueAccent.withValues(alpha: 0.2),
+                    leading: Icon(Icons.badge, color: _selectedTab == 0 ? Colors.blueAccent : Colors.white54),
+                    title: Text('Profile', style: TextStyle(color: _selectedTab == 0 ? Colors.white : Colors.white54)),
+                    onTap: () => setState(() => _selectedTab = 0),
+                  ),
+                  ListTile(
+                    selected: _selectedTab == 1,
+                    selectedTileColor: Colors.blueAccent.withValues(alpha: 0.2),
+                    leading: Icon(Icons.settings, color: _selectedTab == 1 ? Colors.blueAccent : Colors.white54),
+                    title: Text('Settings', style: TextStyle(color: _selectedTab == 1 ? Colors.white : Colors.white54)),
+                    onTap: () => setState(() => _selectedTab = 1),
+                  ),
+                ],
+              ),
+            ),
+            // Content
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: _selectedTab == 0 ? _buildProfile() : _buildSettings(),
+              ),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfile() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Staff Profile', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+        const Divider(color: Colors.white12),
+        const SizedBox(height: 16),
+        _infoRow('Name', 'Admin User'),
+        _infoRow('Role', 'System Administrator'),
+        _infoRow('ID', 'EMP-001'),
+        _infoRow('Department', 'Command Center'),
+        _infoRow('Clearance', 'Level 5 (Max)'),
+      ],
+    );
+  }
+
+  Widget _buildSettings() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('System Settings', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+        const Divider(color: Colors.white12),
+        const SizedBox(height: 16),
+        SwitchListTile(
+          title: const Text('Sound Alarms', style: TextStyle(color: Colors.white)),
+          subtitle: const Text('Play audible warning on new active SOS', style: TextStyle(color: Colors.white54)),
+          value: true,
+          onChanged: (val) {},
+          activeColor: Colors.blueAccent,
+        ),
+        SwitchListTile(
+          title: const Text('Auto-Assign Nearest', style: TextStyle(color: Colors.white)),
+          subtitle: const Text('Automatically dispatch closest medical team', style: TextStyle(color: Colors.white54)),
+          value: false,
+          onChanged: (val) {},
+          activeColor: Colors.blueAccent,
+        ),
+      ],
+    );
+  }
+
+  Widget _infoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(width: 100, child: Text(label, style: const TextStyle(color: Colors.white54))),
+          Expanded(child: Text(value, style: const TextStyle(color: Colors.white))),
+        ],
+      ),
     );
   }
 }

@@ -4,6 +4,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:shared/models/alert.dart';
 import 'package:shared/models/incident.dart';
 import 'sos_screen.dart';
+import 'chat_panel.dart';
 
 class StatusScreen extends StatefulWidget {
   final String alertId;
@@ -184,6 +185,10 @@ class _StatusScreenState extends State<StatusScreen> {
                       },
                     ),
             ),
+
+            // Live Chat Panel
+            if (_incident != null)
+              ChatPanel(incident: _incident!),
 
             // Bottom Status Banner
             Container(
