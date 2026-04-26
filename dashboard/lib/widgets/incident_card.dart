@@ -351,7 +351,7 @@ class _IncidentCardState extends State<IncidentCard> {
                     ),
                     ElevatedButton(
                       // Admin can always resolve. Staff can only resolve (request review) if it's not already pending review.
-                      onPressed: (widget.currentRole == UserRole.admin || !reviewPending) ? widget.onResolve : null,
+                      onPressed: (widget.currentRole == UserRole.admin && reviewPending) || (widget.currentRole != UserRole.admin && !reviewPending) ? widget.onResolve : null,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green[700],
                         foregroundColor: Colors.white,
