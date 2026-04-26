@@ -22,6 +22,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   static const String _venueId = 'mockVenue123';
 
   String _searchQuery = '';
+  String _sortBy = 'severity';
+  EmergencyType? _filterType;
   // Triaged incidents (written by AI Cloud Function after classify)
   List<Incident> _incidents = [];
   // Raw alerts from guest app (written immediately on SOS button press)
@@ -90,7 +92,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             }
 
             // Only surface pending alerts — triaged ones appear as Incidents.
-            if (alert.status == AlertStatus.pending || alert.status == AlertStatus.triaged) {
+            if (alert.status == AlertStatus.pending) {
               updated.add(alert);
             }
           } catch (_) {}
@@ -103,6 +105,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   // ─── Actions ───────────────────────────────────────────────────────────────
+
+  void _clearDatabase() async {
+    await FirebaseDatabase.instance.ref('venues/$_venueId/alerts').remove();
+    await FirebaseDatabase.instance.ref('venues/$_venueId/incidents').remove();
+    if (mounted) setState(() {});
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Firebase Database Cleared!'), backgroundColor: Colors.green));
+  }
 
   void _assignStaff(String incidentId, String staffName) async {
     final int index = _incidents.indexWhere((i) => i.id == incidentId);
@@ -152,19 +161,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final filteredIncidents = _incidents.where((i) {
+    var filteredIncidents = _incidents.where((i) {
       final text = _searchQuery.toLowerCase();
-      return i.type.name.toLowerCase().contains(text) ||
-          i.affectedZone.toLowerCase().contains(text);
+      final textMatch = i.type.name.toLowerCase().contains(text) || i.affectedZone.toLowerCase().contains(text);
+      final typeMatch = _filterType == null || i.type == _filterType;
+      return textMatch && typeMatch;
     }).toList();
 
-    final filteredAlerts = _rawAlerts.where((a) {
+    var filteredAlerts = _rawAlerts.where((a) {
       final text = _searchQuery.toLowerCase();
       final typeName = (a.type ?? EmergencyType.other).name.toLowerCase();
-      return typeName.contains(text) ||
+      final textMatch = typeName.contains(text) ||
           a.roomNumber.toLowerCase().contains(text) ||
           a.description.toLowerCase().contains(text);
+      final typeMatch = _filterType == null || a.type == _filterType;
+      return textMatch && typeMatch;
     }).toList();
+
+    if (_sortBy == 'severity') {
+      filteredIncidents.sort((a, b) => b.severity.compareTo(a.severity));
+      filteredAlerts.sort((a, b) => (b.severity ?? 3).compareTo(a.severity ?? 3));
+    } else {
+      filteredIncidents.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      filteredAlerts.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    }
 
     final int totalCount = _incidents.length + _rawAlerts.length;
 
@@ -187,6 +207,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
             const SizedBox(width: 16),
+            IconButton(
+              icon: const Icon(Icons.delete_forever, color: Colors.redAccent),
+              tooltip: 'Clear Database',
+              onPressed: _clearDatabase,
+            ),
+            const SizedBox(width: 8),
             const CircleAvatar(
               backgroundColor: Colors.grey,
               child: Icon(Icons.person, color: Colors.white),
@@ -227,6 +253,45 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         borderSide: BorderSide.none,
                       ),
                     ),
+                  ),
+                ),
+                
+                // Add Filter Row
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<EmergencyType?>(
+                            dropdownColor: Colors.grey[900],
+                            value: _filterType,
+                            hint: const Text('All Categories', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                            isExpanded: true,
+                            items: [
+                              const DropdownMenuItem(value: null, child: Text('All Categories', style: TextStyle(color: Colors.white, fontSize: 13))),
+                              ...EmergencyType.values.map((t) => DropdownMenuItem(value: t, child: Text(t.name.toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 13))))
+                            ],
+                            onChanged: (val) => setState(() => _filterType = val),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            dropdownColor: Colors.grey[900],
+                            value: _sortBy,
+                            isExpanded: true,
+                            items: const [
+                              DropdownMenuItem(value: 'severity', child: Text('Sort: Severity', style: TextStyle(color: Colors.white, fontSize: 13))),
+                              DropdownMenuItem(value: 'recent', child: Text('Sort: Recent', style: TextStyle(color: Colors.white, fontSize: 13))),
+                            ],
+                            onChanged: (val) => setState(() => _sortBy = val!),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
 
@@ -293,10 +358,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
 
           // ── Main Panel: Venue Map ──────────────────────────────────────────
-          const Expanded(
+          Expanded(
             child: Padding(
-              padding: EdgeInsets.all(16.0),
-              child: VenueMap(),
+              padding: const EdgeInsets.all(16.0),
+              child: VenueMap(incidents: filteredIncidents),
             ),
           ),
         ],

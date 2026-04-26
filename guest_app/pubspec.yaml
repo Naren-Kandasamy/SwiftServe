@@ -38,7 +38,9 @@ dependencies:
   speech_to_text: ^7.3.0
   permission_handler: ^12.0.1
   firebase_core: any
+  firebase_auth: any
   firebase_database: any
+  firebase_storage: any
   uuid: any
   shared:
     path: ../shared
