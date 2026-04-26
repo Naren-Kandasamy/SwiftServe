@@ -43,6 +43,8 @@ class Incident {
   String? requestedResolutionBy;
   List<String> assignedTeams; // IDs of teams assigned to this incident
   String? responderPin; // 4-digit PIN for emergency services access
+  String? roomKey; // 6-char stay token for roommate rejoin
+  Map<String, String>? medicalInfo; // Anonymous medical profile
 
   Incident({
     required this.id,
@@ -61,6 +63,8 @@ class Incident {
     this.requestedResolutionBy,
     this.assignedTeams = const [],
     this.responderPin,
+    this.roomKey,
+    this.medicalInfo,
   });
 
   factory Incident.fromMap(Map<dynamic, dynamic> map) {
@@ -87,6 +91,8 @@ class Incident {
       requestedResolutionBy: map['requestedResolutionBy'] as String?,
       assignedTeams: (map['assignedTeams'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
       responderPin: map['responderPin'] as String?,
+      roomKey: map['roomKey'] as String?,
+      medicalInfo: map['medicalInfo'] != null ? Map<String, String>.from(map['medicalInfo'] as Map) : null,
     );
   }
 
@@ -108,6 +114,8 @@ class Incident {
       'requestedResolutionBy': requestedResolutionBy,
       'assignedTeams': assignedTeams,
       'responderPin': responderPin,
+      'roomKey': roomKey,
+      'medicalInfo': medicalInfo,
     };
   }
 }

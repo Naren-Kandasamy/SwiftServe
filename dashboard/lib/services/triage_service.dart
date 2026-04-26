@@ -239,6 +239,8 @@ Location: Room ${alert.roomNumber}, Floor ${alert.floor}
       createdAt: timestamp,
       imageUrl: resolvedImageUrl, // pass down the resolved image URL
       timeline: timeline,
+      roomKey: alert.roomKey,
+      medicalInfo: alert.medicalInfo,
     );
 
     await FirebaseDatabase.instance.ref('venues/$_venueId/incidents/$incidentId').set(incident.toMap());

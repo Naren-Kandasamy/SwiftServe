@@ -16,6 +16,7 @@ import 'dart:convert';
 import 'status_screen.dart';
 import 'rejoin_screen.dart';
 import 'knowledge_library_screen.dart';
+import 'medical_id_screen.dart';
 import 'package:shared/venue_config.dart';
 import '../services/connectivity_service.dart';
 import '../services/ble_service.dart';
@@ -510,17 +511,29 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
                           onPressed: () => _showLanguagePicker(context),
                         ),
                       ),
-                      // ── Knowledge library (right) ──────────────────
+                      // ── Knowledge library and Medical ID (right) ──────────────────
                       Positioned(
                         right: 0,
-                        child: IconButton(
-                          icon: const Icon(Icons.menu_book, color: Colors.white70),
-                          tooltip: 'Offline Emergency Library',
-                          onPressed: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => const KnowledgeLibraryScreen()),
-                            );
-                          },
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.badge, color: Colors.white70),
+                              tooltip: 'Medical ID',
+                              onPressed: () {
+                                Navigator.push(context, MaterialPageRoute(builder: (_) => const MedicalIdScreen()));
+                              },
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.menu_book, color: Colors.white70),
+                              tooltip: 'Offline Emergency Library',
+                              onPressed: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(builder: (_) => const KnowledgeLibraryScreen()),
+                                );
+                              },
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -1037,6 +1050,19 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
         orElse: () => EmergencyType.other,
       );
 
+      final prefs = await SharedPreferences.getInstance();
+      final Map<String, String>? medicalInfo = prefs.containsKey('med_blood_type') 
+          ? {
+              'name': prefs.getString('med_name') ?? '',
+              'age': prefs.getString('med_age') ?? '',
+              'height': prefs.getString('med_height') ?? '',
+              'weight': prefs.getString('med_weight') ?? '',
+              'bloodType': prefs.getString('med_blood_type') ?? 'Unknown',
+              'allergies': prefs.getString('med_allergies') ?? '',
+              'conditions': prefs.getString('med_conditions') ?? '',
+            }
+          : null;
+
       final alert = Alert(
         id: alertId,
         userId: FirebaseAuth.instance.currentUser?.uid ?? 'offline_user',
@@ -1051,6 +1077,7 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
         status: AlertStatus.pending,
         assignedTo: [],
         roomKey: _roomToken, // Use the stay token for rejoin logic
+        medicalInfo: medicalInfo,
       );
 
       if (_currentTier == ConnectivityTier.online) {

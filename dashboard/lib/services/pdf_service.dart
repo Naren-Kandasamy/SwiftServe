@@ -178,6 +178,35 @@ class PdfService {
                 pw.SizedBox(height: 24),
               ],
 
+              // MEDICAL PROFILE
+              if (incident.medicalInfo != null) ...[
+                pw.Container(
+                  width: double.infinity,
+                  padding: const pw.EdgeInsets.all(12),
+                  decoration: pw.BoxDecoration(
+                    color: PdfColors.red50,
+                    border: pw.Border(left: pw.BorderSide(color: PdfColors.red900, width: 6)),
+                  ),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        'MEDICAL PROFILE (ANONYMOUS)',
+                        style: pw.TextStyle(color: PdfColors.red900, fontWeight: pw.FontWeight.bold, fontSize: 14),
+                      ),
+                      pw.SizedBox(height: 8),
+                      pw.Text('Blood Type: ${incident.medicalInfo!['bloodType'] ?? 'Unknown'}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      pw.Text('Height: ${incident.medicalInfo!['height'] ?? 'N/A'}    |    Weight: ${incident.medicalInfo!['weight'] ?? 'N/A'}'),
+                      if ((incident.medicalInfo!['allergies'] ?? '').isNotEmpty)
+                        pw.Text('Allergies: ${incident.medicalInfo!['allergies']}', style: pw.TextStyle(color: PdfColors.red900)),
+                      if ((incident.medicalInfo!['conditions'] ?? '').isNotEmpty)
+                        pw.Text('Conditions: ${incident.medicalInfo!['conditions']}', style: pw.TextStyle(color: PdfColors.orange900)),
+                    ],
+                  ),
+                ),
+                pw.SizedBox(height: 24),
+              ],
+
               // EVIDENCE IMAGE
               if (attachedImage != null) ...[
                 pw.Text(
