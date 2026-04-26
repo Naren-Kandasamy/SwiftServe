@@ -31,6 +31,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String _searchQuery = '';
   String _sortBy = 'severity';
   EmergencyType? _filterType;
+  String _filterStatus = 'All Statuses';
   List<Incident> _incidents = [];
   List<Alert> _rawAlerts = [];
 
@@ -67,9 +68,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   final Map<String, Map<String, dynamic>> _demoTeams = {
     'Admin': {'role': UserRole.admin, 'teamId': 'hq'},
-    'Sec 1': {'role': UserRole.security, 'teamId': 'sec_01'},
-    'Sec 2': {'role': UserRole.security, 'teamId': 'sec_02'},
-    'Med Alpha': {'role': UserRole.medical, 'teamId': 'med_alpha'},
+    'Security Team 1': {'role': UserRole.security, 'teamId': 'sec_01'},
+    'Security Team 2': {'role': UserRole.security, 'teamId': 'sec_02'},
+    'Medical Alpha': {'role': UserRole.medical, 'teamId': 'med_alpha'},
+    'Medical Beta': {'role': UserRole.medical, 'teamId': 'med_beta'},
+    'Maintenance': {'role': UserRole.management, 'teamId': 'maint_01'},
   };
 
   void _fetchStaffProfile() async {
@@ -287,6 +290,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
       await FirebaseDatabase.instance
           .ref('venues/$_venueId/incidents/$incidentId')
           .update(_incidents[index].toMap());
+          
+      // Also update the underlying alerts to 'resolved' if Admin resolved it
+      if (_currentRole == UserRole.admin) {
+        for (String alertId in _incidents[index].alertIds) {
+          await FirebaseDatabase.instance
+              .ref('venues/$_venueId/alerts/$alertId')
+              .update({'status': AlertStatus.resolved.name});
+        }
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Incident resolved.')),
@@ -316,7 +329,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final text = _searchQuery.toLowerCase();
       final textMatch = i.type.name.toLowerCase().contains(text) || i.affectedZone.toLowerCase().contains(text);
       final typeMatch = _filterType == null || i.type == _filterType;
-      return textMatch && typeMatch;
+      
+      // 3. Status Filter
+      bool statusMatch = true;
+      if (_filterStatus == 'Active') {
+        statusMatch = (i.status == IncidentStatus.active || i.status == IncidentStatus.escalated);
+      } else if (_filterStatus == 'Pending Review') {
+        statusMatch = (i.status == IncidentStatus.reviewPending);
+      } else if (_filterStatus == 'Resolved') {
+        statusMatch = (i.status == IncidentStatus.resolved);
+      }
+      
+      return textMatch && typeMatch && statusMatch;
     }).toList();
 
     var filteredAlerts = _rawAlerts.where((a) {
@@ -333,7 +357,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           a.roomNumber.toLowerCase().contains(text) ||
           a.description.toLowerCase().contains(text);
       final typeMatch = _filterType == null || a.type == _filterType;
-      return textMatch && typeMatch;
+      
+      // 3. Status Filter
+      bool statusMatch = true;
+      if (_filterStatus == 'Resolved' || _filterStatus == 'Pending Review') {
+        statusMatch = false; // Raw alerts are always active
+      }
+
+      return textMatch && typeMatch && statusMatch;
     }).toList();
 
     var activeIncidents = filteredIncidents.where((i) => i.status != IncidentStatus.resolved && i.status != IncidentStatus.reviewPending).toList();
@@ -390,28 +421,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const SizedBox(width: 8),
             // Show switcher if the actual logged in user is Admin/Management
             if (_originalRole == UserRole.admin || _originalRole == UserRole.management)
-              ToggleButtons(
-                isSelected: _demoTeams.values.map((t) => _currentTeamId == t['teamId'] || (_currentRole == UserRole.admin && t['teamId'] == 'hq')).toList(),
-                onPressed: (int index) {
-                  final teamKey = _demoTeams.keys.elementAt(index);
-                  final teamData = _demoTeams[teamKey]!;
-                  setState(() {
-                    _currentRole = teamData['role'] as UserRole;
-                    _currentTeamId = teamData['teamId'] as String;
-                    if (_currentTeamId == 'hq') _currentTeamId = null; // Admin sees all
-                  });
-                },
-                color: Colors.white54,
-                selectedColor: Colors.white,
-                fillColor: Colors.blueAccent.withValues(alpha: 0.2),
-                borderColor: Colors.white12,
-                selectedBorderColor: Colors.blueAccent,
-                borderRadius: BorderRadius.circular(8),
-                constraints: const BoxConstraints(minHeight: 36, minWidth: 65),
-                children: _demoTeams.keys.map((name) => Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                  child: Text(name, style: const TextStyle(fontSize: 11)),
-                )).toList(),
+              Container(
+                height: 36,
+                padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                decoration: BoxDecoration(
+                  color: Colors.blueAccent.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blueAccent),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    dropdownColor: Colors.grey[900],
+                    icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
+                    value: _demoTeams.entries.firstWhere(
+                      (entry) => _currentTeamId == entry.value['teamId'] || (_currentRole == UserRole.admin && entry.value['teamId'] == 'hq'),
+                      orElse: () => _demoTeams.entries.first,
+                    ).key,
+                    items: _demoTeams.keys.map((name) {
+                      return DropdownMenuItem<String>(
+                        value: name,
+                        child: Text(name, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                      );
+                    }).toList(),
+                    onChanged: (String? newTeamKey) {
+                      if (newTeamKey != null) {
+                        final teamData = _demoTeams[newTeamKey]!;
+                        setState(() {
+                          _currentRole = teamData['role'] as UserRole;
+                          _currentTeamId = teamData['teamId'] as String;
+                          if (_currentTeamId == 'hq') _currentTeamId = null; // Admin sees all
+                        });
+                      }
+                    },
+                  ),
+                ),
               ),
             const SizedBox(width: 16),
             PopupMenuButton<String>(
@@ -508,14 +551,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     children: [
                       Expanded(
                         child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            dropdownColor: Colors.grey[900],
+                            value: _filterStatus,
+                            isExpanded: true,
+                            items: const [
+                              DropdownMenuItem(value: 'All Statuses', child: Text('All Statuses', style: TextStyle(color: Colors.white, fontSize: 12))),
+                              DropdownMenuItem(value: 'Active', child: Text('Active Only', style: TextStyle(color: Colors.white, fontSize: 12))),
+                              DropdownMenuItem(value: 'Pending Review', child: Text('Pending Review', style: TextStyle(color: Colors.white, fontSize: 12))),
+                              DropdownMenuItem(value: 'Resolved', child: Text('Resolved', style: TextStyle(color: Colors.white, fontSize: 12))),
+                            ],
+                            onChanged: (val) => setState(() => _filterStatus = val!),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: DropdownButtonHideUnderline(
                           child: DropdownButton<EmergencyType?>(
                             dropdownColor: Colors.grey[900],
                             value: _filterType,
-                            hint: const Text('All Categories', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                            hint: const Text('All Categories', style: TextStyle(color: Colors.white70, fontSize: 12)),
                             isExpanded: true,
                             items: [
-                              const DropdownMenuItem(value: null, child: Text('All Categories', style: TextStyle(color: Colors.white, fontSize: 13))),
-                              ...EmergencyType.values.map((t) => DropdownMenuItem(value: t, child: Text(t.name.toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 13))))
+                              const DropdownMenuItem(value: null, child: Text('All Categories', style: TextStyle(color: Colors.white, fontSize: 12))),
+                              ...EmergencyType.values.map((t) => DropdownMenuItem(value: t, child: Text(t.name.toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 12))))
                             ],
                             onChanged: (val) => setState(() => _filterType = val),
                           ),
@@ -529,8 +589,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             value: _sortBy,
                             isExpanded: true,
                             items: const [
-                              DropdownMenuItem(value: 'severity', child: Text('Sort: Severity', style: TextStyle(color: Colors.white, fontSize: 13))),
-                              DropdownMenuItem(value: 'recent', child: Text('Sort: Recent', style: TextStyle(color: Colors.white, fontSize: 13))),
+                              DropdownMenuItem(value: 'severity', child: Text('Sort: Severity', style: TextStyle(color: Colors.white, fontSize: 12))),
+                              DropdownMenuItem(value: 'recent', child: Text('Sort: Recent', style: TextStyle(color: Colors.white, fontSize: 12))),
                             ],
                             onChanged: (val) => setState(() => _sortBy = val!),
                           ),

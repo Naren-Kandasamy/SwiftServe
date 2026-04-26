@@ -37,9 +37,16 @@ class _ResponderViewScreenState extends State<ResponderViewScreen> {
       if (!mounted) return;
       final data = event.snapshot.value;
       if (data is Map) {
+        final updatedIncident = Incident.fromMap(Map<dynamic, dynamic>.from(data));
+        if (updatedIncident.status == IncidentStatus.resolved) {
+          Navigator.of(context).pushReplacementNamed('/responder');
+          return;
+        }
         setState(() {
-          _incident = Incident.fromMap(Map<dynamic, dynamic>.from(data));
+          _incident = updatedIncident;
         });
+      } else {
+        Navigator.of(context).pushReplacementNamed('/responder');
       }
     });
   }
@@ -52,6 +59,10 @@ class _ResponderViewScreenState extends State<ResponderViewScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF1E1E2C),
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.of(context).pushReplacementNamed('/responder'),
+        ),
         backgroundColor: Colors.orange[900],
         title: const Text('CRISISNET LIVE BRIEFING', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 2)),
         centerTitle: false,

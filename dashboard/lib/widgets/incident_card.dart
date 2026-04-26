@@ -349,6 +349,26 @@ class _IncidentCardState extends State<IncidentCard> {
                       ),
                       child: Text(escalated ? 'Escalated' : 'Escalate'),
                     ),
+                    if (widget.currentRole == UserRole.admin && reviewPending)
+                      TextButton(
+                        onPressed: () async {
+                          widget.incidentData.status = IncidentStatus.active;
+                          widget.incidentData.timeline.add(IncidentUpdate(
+                            timestamp: DateTime.now().millisecondsSinceEpoch,
+                            updateText: 'Admin declined closure. Incident remains active.',
+                          ));
+                          await FirebaseDatabase.instance
+                              .ref('venues/${widget.incidentData.venueId}/incidents/${widget.incidentData.id}')
+                              .update(widget.incidentData.toMap());
+                        },
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.orangeAccent,
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          textStyle: const TextStyle(fontSize: 12),
+                        ),
+                        child: const Text('Decline'),
+                      ),
                     ElevatedButton(
                       // Admin can always resolve. Staff can only resolve (request review) if it's not already pending review.
                       onPressed: (widget.currentRole == UserRole.admin && reviewPending) || (widget.currentRole != UserRole.admin && !reviewPending) ? widget.onResolve : null,
