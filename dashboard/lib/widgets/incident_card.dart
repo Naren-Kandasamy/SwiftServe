@@ -5,6 +5,7 @@ import 'package:shared/models/incident.dart';
 import 'package:shared/models/alert.dart';
 import '../services/pdf_service.dart';
 import 'incident_chat_dialog.dart';
+import 'timeline_entry.dart';
 
 class IncidentCard extends StatefulWidget {
   final Incident incidentData;
@@ -26,6 +27,7 @@ class IncidentCard extends StatefulWidget {
 
 class _IncidentCardState extends State<IncidentCard> {
   bool _isGenerating = false;
+  bool _timelineExpanded = false;
 
   Color _getSeverityColor(int severity) {
     switch (severity) {
@@ -159,36 +161,34 @@ class _IncidentCardState extends State<IncidentCard> {
                       final url = await PdfService.generateBriefUrl(widget.incidentData);
                       if (!mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
-  SnackBar(
-    behavior: SnackBarBehavior.floating,
-    margin: EdgeInsets.only(bottom: MediaQuery.of(context).size.height - 150, left: 16, right: 16),
-    elevation: 10,
-    backgroundColor: Colors.green[800],
-    duration: const Duration(seconds: 6),
-    content: Row(
-      children: [
-        const Icon(Icons.check_circle, color: Colors.white, size: 18),
-        const SizedBox(width: 8),
-        const Expanded(child: Text('Responder Brief ready!', style: TextStyle(color: Colors.white))),
-        TextButton(
-          onPressed: () {
-            html.window.navigator.clipboard?.writeText(url);
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Link copied to clipboard')),
-            );
-          },
-          child: const Text('COPY', style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold)),
-        ),
-        IconButton(
-          icon: const Icon(Icons.close, color: Colors.white70, size: 18),
-          onPressed: () {
-            ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          },
-        ),
-      ],
-    ),
-  ),
-);
+                        SnackBar(
+                          behavior: SnackBarBehavior.floating,
+                          margin: EdgeInsets.only(bottom: MediaQuery.of(context).size.height - 150, left: 16, right: 16),
+                          elevation: 10,
+                          backgroundColor: Colors.green[800],
+                          duration: const Duration(seconds: 6),
+                          content: Row(
+                            children: [
+                              const Icon(Icons.check_circle, color: Colors.white, size: 18),
+                              const SizedBox(width: 8),
+                              const Expanded(child: Text('Responder Brief ready!', style: TextStyle(color: Colors.white))),
+                              TextButton(
+                                onPressed: () {
+                                  html.window.navigator.clipboard?.writeText(url);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Link copied to clipboard')),
+                                  );
+                                },
+                                child: const Text('COPY', style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold)),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.close, color: Colors.white70, size: 18),
+                                onPressed: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
                     } catch (e) {
                       if (!mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -207,7 +207,6 @@ class _IncidentCardState extends State<IncidentCard> {
                   label: Text(_isGenerating ? 'Generating...' : 'Brief', style: const TextStyle(color: Colors.blueAccent)),
                   style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
                 ),
-                
                 TextButton.icon(
                   onPressed: () {
                     showDialog(
@@ -219,8 +218,6 @@ class _IncidentCardState extends State<IncidentCard> {
                   label: const Text('Chat', style: TextStyle(color: Colors.greenAccent)),
                   style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
                 ),
-                
-                // Right side: assignment + escalate + resolve
                 Wrap(
                   spacing: 6.0,
                   runSpacing: 4.0,
@@ -277,7 +274,58 @@ class _IncidentCardState extends State<IncidentCard> {
                   ],
                 ),
               ],
-            )
+            ),
+            // ── Timeline toggle ─────────────────────────────────────────
+            if (widget.incidentData.timeline.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              GestureDetector(
+                onTap: () => setState(() => _timelineExpanded = !_timelineExpanded),
+                child: Row(
+                  children: [
+                    Icon(
+                      _timelineExpanded ? Icons.expand_less : Icons.expand_more,
+                      size: 16,
+                      color: Colors.white38,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'TIMELINE (${widget.incidentData.timeline.length})',
+                      style: const TextStyle(
+                        color: Colors.white38,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              AnimatedSize(
+                duration: const Duration(milliseconds: 280),
+                curve: Curves.easeInOut,
+                child: _timelineExpanded
+                  ? Container(
+                      margin: const EdgeInsets.only(top: 8),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.white10),
+                      ),
+                      child: Column(
+                        children: [
+                          for (int i = 0; i < widget.incidentData.timeline.length; i++)
+                            TimelineEntry(
+                              update: widget.incidentData.timeline[i],
+                              isFirst: i == 0,
+                              isLast: i == widget.incidentData.timeline.length - 1,
+                            ),
+                        ],
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+              ),
+            ],
           ],
         ),
       ),

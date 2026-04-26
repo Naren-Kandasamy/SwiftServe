@@ -4,40 +4,105 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Active Threat / Security Incident</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #121212; color: #fff; line-height: 1.6; padding: 20px; }
-        h1 { color: #03a9f4; font-size: 28px; border-bottom: 2px solid #03a9f4; padding-bottom: 10px; }
-        h2 { color: #4fc3f7; font-size: 20px; margin-top: 24px; }
-        ul { list-style-type: none; padding: 0; }
-        li { background: #1e1e1e; margin-bottom: 12px; padding: 16px; border-left: 4px solid #03a9f4; border-radius: 4px; }
-    </style>
+    
+    <link rel="stylesheet" href="css/style.css">
+    <script src="js/translations.js"></script>
+    <script src="js/app.js"></script>
 </head>
 <body>
-    <h1>🔒 Active Security Threat</h1>
-    
-    <h2>1. RUN (Evacuate)</h2>
+    <h1 data-i18n="security_title">🔒 Active Security Threat</h1>
+    <div style="text-align: center; margin: 20px 0;">
+        <img src="img/security.png" style="width:100%; max-width: 400px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+    </div>
+        <h2 data-i18n="security_h2_1">1. RUN (Evacuate)</h2>
     <ul>
-        <li>If there is an accessible escape path, attempt to evacuate the premises.</li>
-        <li>Leave your belongings behind.</li>
-        <li>Help others escape, if possible, but keep moving.</li>
-        <li>Keep your hands visible when encountering law enforcement.</li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text" data-i18n="security_step1">If there is an accessible escape path, attempt to evacuate the premises.</div>
+    </li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text" data-i18n="security_step2">Leave your belongings behind.</div>
+    </li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text" data-i18n="security_step3">Help others escape, if possible, but keep moving.</div>
+    </li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text" data-i18n="security_step4">Keep your hands visible when encountering law enforcement.</div>
+    </li>
     </ul>
 
-    <h2>2. HIDE (Lockdown)</h2>
+    <h2 data-i18n="security_h2_2">2. HIDE (Lockdown)</h2>
     <ul>
-        <li>If evacuation is not possible, find a place to hide where the active threat is less likely to find you.</li>
-        <li><strong>Lock the door</strong> and blockade it with heavy furniture.</li>
-        <li><strong>Silence your phone</strong> (including vibrate mode) and turn off any source of noise.</li>
-        <li>Hide behind large items (e.g., cabinets, desks).</li>
-        <li>Remain entirely quiet.</li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text" data-i18n="security_step5">If evacuation is not possible, find a place to hide where the active threat is less likely to find you.</div>
+    </li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text"><strong>Lock the door</strong> and blockade it with heavy furniture.</div>
+    </li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text"><strong>Silence your phone</strong> (including vibrate mode) and turn off any source of noise.</div>
+    </li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text" data-i18n="security_step6">Hide behind large items (e.g., cabinets, desks).</div>
+    </li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text" data-i18n="security_step7">Remain entirely quiet.</div>
+    </li>
     </ul>
 
-    <h2>3. FIGHT (Last Resort)</h2>
+    <h2 data-i18n="security_h2_3">3. FIGHT (Last Resort)</h2>
     <ul>
-        <li>As a last resort, and only when your life is in imminent danger, attempt to disrupt or incapacitate the threat.</li>
-        <li>Act as aggressively as possible against the attacker.</li>
-        <li>Throw items and improvise weapons.</li>
-        <li>Commit to your actions.</li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text" data-i18n="security_step8">As a last resort, and only when your life is in imminent danger, attempt to disrupt or incapacitate the threat.</div>
+    </li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text" data-i18n="security_step9">Act as aggressively as possible against the attacker.</div>
+    </li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text" data-i18n="security_step10">Throw items and improvise weapons.</div>
+    </li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text" data-i18n="security_step11">Commit to your actions.</div>
+    </li>
     </ul>
+    <button id="fab-tts"></button>
 </body>
 </html>

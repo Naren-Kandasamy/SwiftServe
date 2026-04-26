@@ -1,0 +1,168 @@
+:root {
+    --bg-color: #ffffff;
+    --card-bg: #f5f5f7;
+    --text-primary: #1d1d1f;
+    --text-secondary: #86868b;
+    --accent-color: #ff3b3b;
+    --accent-light: rgba(255, 59, 59, 0.1);
+    --border-color: #e5e5ea;
+    --check-color: #34c759;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg-color: #000000;
+        --card-bg: #1c1c1e;
+        --text-primary: #f5f5f7;
+        --text-secondary: #86868b;
+        --accent-color: #ff453a;
+        --accent-light: rgba(255, 69, 58, 0.15);
+        --border-color: #38383a;
+        --check-color: #32d74b;
+    }
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    line-height: 1.6;
+    padding: 24px;
+    margin: 0;
+    padding-bottom: 100px; /* space for FAB */
+    transition: background-color 0.3s, color 0.3s;
+}
+
+h1 {
+    color: var(--accent-color);
+    font-size: 28px;
+    font-weight: 800;
+    border-bottom: 2px solid var(--border-color);
+    padding-bottom: 16px;
+    margin-bottom: 32px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+h2 {
+    font-size: 20px;
+    font-weight: 600;
+    margin-top: 32px;
+    margin-bottom: 16px;
+    color: var(--text-primary);
+}
+
+ul {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+
+li {
+    background: var(--card-bg);
+    margin-bottom: 12px;
+    padding: 18px 16px;
+    border-left: 4px solid var(--accent-color);
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+li:active {
+    transform: scale(0.98);
+}
+
+li.completed {
+    border-left-color: var(--check-color);
+    opacity: 0.6;
+}
+
+li.completed .step-text {
+    text-decoration: line-through;
+    color: var(--text-secondary);
+}
+
+li.completed svg {
+    fill: var(--check-color);
+}
+
+.step-icon {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    margin-top: 2px;
+}
+
+.step-icon svg {
+    width: 100%;
+    height: 100%;
+    fill: var(--accent-color);
+    transition: fill 0.2s;
+}
+
+.step-text {
+    flex-grow: 1;
+    font-size: 16px;
+    transition: color 0.2s;
+}
+
+strong {
+    display: block;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.danger {
+    background-color: var(--accent-light);
+    border: 1px solid var(--accent-color);
+    padding: 16px;
+    border-radius: 12px;
+    color: var(--accent-color);
+    font-weight: 700;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Floating Action Button (TTS) */
+#fab-tts {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background-color: var(--text-primary);
+    color: var(--bg-color);
+    border: none;
+    border-radius: 30px;
+    padding: 14px 24px;
+    font-size: 16px;
+    font-weight: 700;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    z-index: 1000;
+    backdrop-filter: blur(10px);
+    transition: transform 0.2s, background-color 0.2s;
+}
+
+#fab-tts:active {
+    transform: scale(0.95);
+}
+
+#fab-tts svg {
+    width: 20px;
+    height: 20px;
+    fill: var(--bg-color);
+}

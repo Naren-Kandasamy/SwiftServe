@@ -1,9 +1,11 @@
 // ignore: avoid_web_libraries_in_flutter
 import 'dart:html' as html show window;
+import 'dart:collection';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared/models/alert.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import '../main.dart'; // To access appLocale
 
 class OfflineKnowledgeService {
   static final Map<EmergencyType, String> _assetMap = {
@@ -40,7 +42,7 @@ class OfflineKnowledgeService {
     // Flutter Web cannot render native InAppWebView — open as a new tab from asset URL
     if (kIsWeb) {
       // Construct a relative path the browser can reach from the Flutter Web asset bundle
-      html.window.open(assetPath, '_blank');
+      html.window.open('$assetPath?lang=${appLocale.value.languageCode}', '_blank');
       return;
     }
 
@@ -54,8 +56,14 @@ class OfflineKnowledgeService {
           ),
           body: InAppWebView(
             initialFile: assetPath,
+            initialUserScripts: UnmodifiableListView<UserScript>([
+              UserScript(
+                source: "window.appLang = '${appLocale.value.languageCode}';",
+                injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+              )
+            ]),
             initialSettings: InAppWebViewSettings(
-              javaScriptEnabled: false, // Security: static HTML only
+              javaScriptEnabled: true, // Enabled for TTS and Checklist
               transparentBackground: true,
             ),
           ),
@@ -66,7 +74,7 @@ class OfflineKnowledgeService {
 
   static void showCustomKnowledgeScreen(BuildContext context, String title, String assetPath) {
     if (kIsWeb) {
-      html.window.open(assetPath, '_blank');
+      html.window.open('$assetPath?lang=${appLocale.value.languageCode}', '_blank');
       return;
     }
 
@@ -79,8 +87,14 @@ class OfflineKnowledgeService {
           ),
           body: InAppWebView(
             initialFile: assetPath,
+            initialUserScripts: UnmodifiableListView<UserScript>([
+              UserScript(
+                source: "window.appLang = '${appLocale.value.languageCode}';",
+                injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+              )
+            ]),
             initialSettings: InAppWebViewSettings(
-              javaScriptEnabled: false,
+              javaScriptEnabled: true,
               transparentBackground: true,
             ),
           ),

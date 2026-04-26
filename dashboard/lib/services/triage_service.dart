@@ -208,21 +208,36 @@ Location: Room ${alert.roomNumber}, Floor ${alert.floor}
       parsedType = EmergencyType.values.firstWhere((e) => e.name == triageResult['type']);
     } catch (_) {}
 
+    final severity = triageResult['severity'] as int? ?? 3;
+    bool shouldEscalate = triageResult['escalateToEmergencyServices'] == true;
+    
+    // Auto-escalate severe fires (Level 4+)
+    if (parsedType == EmergencyType.fire && severity >= 4) {
+      shouldEscalate = true;
+    }
+
+    final timeline = [
+      IncidentUpdate(timestamp: timestamp, updateText: 'SOS Received: "${alert.description}"'),
+      IncidentUpdate(timestamp: timestamp + 50, updateText: 'AI Triaged as ${parsedType.name.toUpperCase()} (Severity $severity).')
+    ];
+
+    // Explicitly add escalation to timeline so the user is notified
+    if (shouldEscalate) {
+      timeline.add(IncidentUpdate(timestamp: timestamp + 100, updateText: 'Escalated to Emergency Services'));
+    }
+
     final incident = Incident(
       id: incidentId,
       venueId: _venueId,
       alertIds: [alert.id],
       type: parsedType,
-      severity: triageResult['severity'] as int? ?? 3,
+      severity: severity,
       affectedZone: '${alert.roomNumber} (Floor ${alert.floor})',
-      status: (triageResult['escalateToEmergencyServices'] == true) ? IncidentStatus.escalated : IncidentStatus.active,
+      status: shouldEscalate ? IncidentStatus.escalated : IncidentStatus.active,
       guestCount: 1,
       createdAt: timestamp,
       imageUrl: resolvedImageUrl, // pass down the resolved image URL
-      timeline: [
-        IncidentUpdate(timestamp: timestamp, updateText: 'SOS Received: "${alert.description}"'),
-        IncidentUpdate(timestamp: timestamp + 50, updateText: 'AI Triaged as ${parsedType.name.toUpperCase()} (Severity ${triageResult['severity'] ?? 3}).')
-      ],
+      timeline: timeline,
     );
 
     await FirebaseDatabase.instance.ref('venues/$_venueId/incidents/$incidentId').set(incident.toMap());
