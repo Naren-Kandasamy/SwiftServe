@@ -5,6 +5,7 @@ class AppUser {
   String name;
   String venueId;
   UserRole role;
+  String? teamId;          // staff only — e.g. "sec_01"
   String? roomNumber;      // guests only
   int? floor;              // guests only
   String? fcmToken;        // for push notifications
@@ -15,6 +16,7 @@ class AppUser {
     required this.name,
     required this.venueId,
     required this.role,
+    this.teamId,
     this.roomNumber,
     this.floor,
     this.fcmToken,

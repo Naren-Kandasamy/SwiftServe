@@ -205,7 +205,8 @@ Location: Room ${alert.roomNumber}, Floor ${alert.floor}
     
     EmergencyType parsedType = EmergencyType.other;
     try {
-      parsedType = EmergencyType.values.firstWhere((e) => e.name == triageResult['type']);
+      final String triageType = triageResult['type']?.toString().toLowerCase() ?? 'other';
+      parsedType = EmergencyType.values.firstWhere((e) => e.name.toLowerCase() == triageType);
     } catch (_) {}
 
     final severity = triageResult['severity'] as int? ?? 3;

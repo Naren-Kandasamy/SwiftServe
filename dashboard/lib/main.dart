@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'firebase_options.dart';
 import 'screens/dashboard_screen.dart';
+import 'screens/login_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -12,8 +13,6 @@ void main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     ).timeout(const Duration(seconds: 5));
-
-    await FirebaseAuth.instance.signInAnonymously();
   } catch (e) {
     debugPrint('[Offline Mode] Firebase init failed or timed out on Dashboard: $e');
   }
@@ -34,7 +33,39 @@ class CrisisNetDashboardApp extends StatelessWidget {
         fontFamily: 'Roboto',
       ),
       debugShowCheckedModeBanner: false,
-      home: const DashboardScreen(),
+      home: const _AuthGate(),
+    );
+  }
+}
+
+/// Listens to Firebase auth state and routes accordingly.
+/// - Email-authenticated → DashboardScreen (staff)
+/// - Not signed in → LoginScreen
+class _AuthGate extends StatelessWidget {
+  const _AuthGate();
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        // Still waiting for Firebase to return auth state
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            backgroundColor: Color(0xFF0F172A),
+            body: Center(child: CircularProgressIndicator(color: Colors.redAccent)),
+          );
+        }
+
+        final user = snapshot.data;
+
+        // Only allow email-authenticated staff — anonymous users are guests only
+        if (user != null && !user.isAnonymous) {
+          return const DashboardScreen();
+        }
+
+        return const LoginScreen();
+      },
     );
   }
 }

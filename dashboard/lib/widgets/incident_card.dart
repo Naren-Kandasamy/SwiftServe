@@ -5,13 +5,16 @@ import 'package:shared/models/incident.dart';
 import 'package:shared/models/alert.dart';
 import '../services/pdf_service.dart';
 import 'incident_chat_dialog.dart';
+import 'internal_chat_dialog.dart';
 import 'timeline_entry.dart';
+import 'package:shared/models/user.dart';
 
 class IncidentCard extends StatefulWidget {
   final Incident incidentData;
   final VoidCallback onAssign;
   final VoidCallback onEscalate;
   final VoidCallback onResolve;
+  final UserRole currentRole;
 
   const IncidentCard({
     super.key,
@@ -19,6 +22,7 @@ class IncidentCard extends StatefulWidget {
     required this.onAssign,
     required this.onEscalate,
     required this.onResolve,
+    required this.currentRole,
   });
 
   @override
@@ -29,7 +33,10 @@ class _IncidentCardState extends State<IncidentCard> {
   bool _isGenerating = false;
   bool _timelineExpanded = false;
 
-  Color _getSeverityColor(int severity) {
+  Color _getSeverityColor(int severity, IncidentStatus status) {
+    if (status == IncidentStatus.reviewPending) {
+      return Colors.purpleAccent;
+    }
     switch (severity) {
       case 1: return Colors.blueGrey;
       case 2: return Colors.blue;
@@ -62,8 +69,14 @@ class _IncidentCardState extends State<IncidentCard> {
     // Derive assigned string from the timeline updates if any exist containing 'Assigned'
     final String? assigned = widget.incidentData.timeline.where((t) => t.updateText.contains('Assigned')).map((t) => t.updateText.replaceFirst('Assigned to ', '')).lastOrNull;
     final bool escalated = widget.incidentData.status == IncidentStatus.escalated;
+    final bool reviewPending = widget.incidentData.status == IncidentStatus.reviewPending;
     
-    final severityColor = _getSeverityColor(severity);
+    // Team Assignment Label
+    final String assignedTeamsLabel = widget.incidentData.assignedTeams.isEmpty 
+        ? 'Unassigned' 
+        : widget.incidentData.assignedTeams.join(', ');
+
+    final severityColor = _getSeverityColor(severity, widget.incidentData.status);
     
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
@@ -128,6 +141,17 @@ class _IncidentCardState extends State<IncidentCard> {
                         child: const Text('ESC', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 12)),
                       ),
                     ],
+                    if (reviewPending) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.purple[900]?.withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Text('REV PEND', style: TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                      ),
+                    ],
                   ],
                 ),
               ],
@@ -142,6 +166,17 @@ class _IncidentCardState extends State<IncidentCard> {
                 const Icon(Icons.access_time, size: 14, color: Colors.white54),
                 const SizedBox(width: 4),
                 Text(time, style: const TextStyle(color: Colors.white70, fontSize: 14)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.people_outline, size: 14, color: Colors.blueAccent),
+                const SizedBox(width: 4),
+                Text(
+                  'Assigned: $assignedTeamsLabel',
+                  style: const TextStyle(color: Colors.blueAccent, fontSize: 13, fontWeight: FontWeight.w500),
+                ),
               ],
             ),
             const SizedBox(height: 16),
@@ -211,11 +246,31 @@ class _IncidentCardState extends State<IncidentCard> {
                   onPressed: () {
                     showDialog(
                       context: context,
-                      builder: (context) => IncidentChatDialog(incident: widget.incidentData),
+                      builder: (context) => IncidentChatDialog(
+                        incident: widget.incidentData,
+                        currentRole: widget.currentRole,
+                        teamId: widget.currentRole == UserRole.admin ? 'ADMIN' : (widget.incidentData.assignedTeams.isNotEmpty ? widget.incidentData.assignedTeams.first : null),
+                      ),
                     );
                   },
                   icon: const Icon(Icons.chat, color: Colors.greenAccent, size: 16),
-                  label: const Text('Chat', style: TextStyle(color: Colors.greenAccent)),
+                  label: const Text('Guest Chat', style: TextStyle(color: Colors.greenAccent)),
+                  style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
+                ),
+                TextButton.icon(
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (context) => InternalChatDialog(
+                        incident: widget.incidentData, 
+                        currentRole: widget.currentRole,
+                        // Pass the first assigned team as the user's team identity for chat
+                        teamId: widget.currentRole == UserRole.admin ? 'ADMIN' : (widget.incidentData.assignedTeams.isNotEmpty ? widget.incidentData.assignedTeams.first : null),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.people, color: Colors.purpleAccent, size: 16),
+                  label: const Text('Internal', style: TextStyle(color: Colors.purpleAccent)),
                   style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
                 ),
                 Wrap(
@@ -261,15 +316,22 @@ class _IncidentCardState extends State<IncidentCard> {
                       child: Text(escalated ? 'Escalated' : 'Escalate'),
                     ),
                     ElevatedButton(
-                      onPressed: widget.onResolve,
+                      // Admin can always resolve. Staff can only resolve (request review) if it's not already pending review.
+                      onPressed: (widget.currentRole == UserRole.admin || !reviewPending) ? widget.onResolve : null,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green[700],
                         foregroundColor: Colors.white,
+                        disabledBackgroundColor: Colors.grey[800],
+                        disabledForegroundColor: Colors.white30,
                         visualDensity: VisualDensity.compact,
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                         textStyle: const TextStyle(fontSize: 12),
                       ),
-                      child: const Text('Resolve'),
+                      child: Text(
+                        reviewPending
+                            ? (widget.currentRole == UserRole.admin ? 'Confirm Resolve' : 'Awaiting Admin')
+                            : (widget.currentRole == UserRole.admin ? 'Awaiting Staff' : 'Request Close'),
+                      ),
                     ),
                   ],
                 ),

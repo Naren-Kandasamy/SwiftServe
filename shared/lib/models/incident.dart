@@ -1,6 +1,6 @@
 import 'alert.dart';
 
-enum IncidentStatus { active, escalated, contained, resolved }
+enum IncidentStatus { active, escalated, contained, reviewPending, resolved }
 
 class IncidentUpdate {
   int timestamp;
@@ -40,6 +40,8 @@ class Incident {
   List<IncidentUpdate> timeline; // chronological log of all updates
   String? responderBriefUrl;
   String? imageUrl; // Optional image evidence
+  String? requestedResolutionBy;
+  List<String> assignedTeams; // IDs of teams assigned to this incident
 
   Incident({
     required this.id,
@@ -55,6 +57,8 @@ class Incident {
     required this.timeline,
     this.responderBriefUrl,
     this.imageUrl,
+    this.requestedResolutionBy,
+    this.assignedTeams = const [],
   });
 
   factory Incident.fromMap(Map<dynamic, dynamic> map) {
@@ -78,6 +82,8 @@ class Incident {
       timeline: (map['timeline'] as List<dynamic>?)?.map((e) => IncidentUpdate.fromMap(e as Map<dynamic, dynamic>)).toList() ?? [],
       responderBriefUrl: map['responderBriefUrl'] as String?,
       imageUrl: map['imageUrl'] as String?,
+      requestedResolutionBy: map['requestedResolutionBy'] as String?,
+      assignedTeams: (map['assignedTeams'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
     );
   }
 
@@ -96,6 +102,8 @@ class Incident {
       'timeline': timeline.map((x) => x.toMap()).toList(),
       'responderBriefUrl': responderBriefUrl,
       'imageUrl': imageUrl,
+      'requestedResolutionBy': requestedResolutionBy,
+      'assignedTeams': assignedTeams,
     };
   }
 }

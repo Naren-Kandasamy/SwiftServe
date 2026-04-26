@@ -4,8 +4,10 @@ import 'dart:html' as html;
 // ignore: avoid_web_libraries_in_flutter
 import 'dart:js' as js;
 import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared/models/alert.dart';
 import 'package:shared/models/incident.dart';
+import 'package:shared/models/user.dart';
 import '../services/triage_service.dart';
 import '../widgets/incident_card.dart';
 import '../widgets/venue_map.dart';
@@ -36,10 +38,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _unreadCritical = 0;
   bool _initialized = false; // suppress alerts on first load
   final Set<String> _seenIncidentIds = {};
+  UserRole _currentRole = UserRole.admin;
+  UserRole _originalRole = UserRole.admin; // Track the REAL role from the DB
+  String? _currentTeamId; // null for admin/hq, set for specific teams
 
   @override
   void initState() {
     super.initState();
+    _fetchStaffProfile();
     _requestNotificationPermission();
     _subscribeToIncidents();
     _subscribeToAlerts();
@@ -57,6 +63,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
         html.Notification.requestPermission();
       }
     } catch (_) {}
+  }
+
+  final Map<String, Map<String, dynamic>> _demoTeams = {
+    'Admin': {'role': UserRole.admin, 'teamId': 'hq'},
+    'Sec 1': {'role': UserRole.security, 'teamId': 'sec_01'},
+    'Sec 2': {'role': UserRole.security, 'teamId': 'sec_02'},
+    'Med Alpha': {'role': UserRole.medical, 'teamId': 'med_alpha'},
+  };
+
+  void _fetchStaffProfile() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    try {
+      final snapshot = await FirebaseDatabase.instance
+          .ref('venues/$_venueId/config/staffRoster/$uid')
+          .get();
+      
+      if (snapshot.exists && snapshot.value is Map) {
+        final data = Map<dynamic, dynamic>.from(snapshot.value as Map);
+        final fetchedRole = UserRole.values.firstWhere(
+            (r) => r.name == data['role'],
+            orElse: () => UserRole.admin,
+          );
+        setState(() {
+          _currentRole = fetchedRole;
+          _originalRole = fetchedRole;
+          _currentTeamId = data['teamId']?.toString();
+        });
+        print('[Dashboard] Profile loaded: Role=$_currentRole, Team=$_currentTeamId');
+      }
+    } catch (e) {
+      debugPrint('Error fetching staff profile: $e');
+    }
   }
 
   // ─── Firebase Listeners ────────────────────────────────────────────────────
@@ -164,17 +204,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _clearDatabase() async {
     await FirebaseDatabase.instance.ref('venues/$_venueId/alerts').remove();
     await FirebaseDatabase.instance.ref('venues/$_venueId/incidents').remove();
+    await FirebaseDatabase.instance.ref('venues/$_venueId/messages').remove();
+    await FirebaseDatabase.instance.ref('venues/$_venueId/internal_messages').remove();
     if (mounted) setState(() {});
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Firebase Database Cleared!'), backgroundColor: Colors.green));
   }
 
-  void _assignStaff(String incidentId, String staffName) async {
+  void _assignStaff(String incidentId, String teamName, String teamId) async {
     final int index = _incidents.indexWhere((i) => i.id == incidentId);
     if (index == -1) return;
     final incident = _incidents[index];
+    
+    if (!incident.assignedTeams.contains(teamId)) {
+      incident.assignedTeams.add(teamId);
+    }
+
     incident.timeline.add(IncidentUpdate(
       timestamp: DateTime.now().millisecondsSinceEpoch,
-      updateText: 'Assigned to $staffName',
+      updateText: 'Assigned to $teamName',
     ));
     await FirebaseDatabase.instance
         .ref('venues/$_venueId/incidents/$incidentId')
@@ -183,7 +230,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('$staffName has been dispatched.'),
+        content: Text('$teamName has been dispatched.'),
         backgroundColor: Colors.green[700],
       ),
     );
@@ -216,14 +263,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final index = _incidents.indexWhere((i) => i.id == incidentId);
     if (index == -1) return;
     
-    setState(() {
-      _incidents[index].status = IncidentStatus.resolved;
-      _incidents[index].resolvedAt = DateTime.now().millisecondsSinceEpoch;
-      _incidents[index].timeline.add(IncidentUpdate(
-        timestamp: DateTime.now().millisecondsSinceEpoch,
-        updateText: 'Incident marked as Resolved by Admin.',
-      ));
-    });
+    if (_currentRole == UserRole.admin) {
+      setState(() {
+        _incidents[index].status = IncidentStatus.resolved;
+        _incidents[index].resolvedAt = DateTime.now().millisecondsSinceEpoch;
+        _incidents[index].timeline.add(IncidentUpdate(
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+          updateText: 'Incident marked as Resolved by Admin.',
+        ));
+      });
+    } else {
+      setState(() {
+        _incidents[index].status = IncidentStatus.reviewPending;
+        _incidents[index].requestedResolutionBy = _currentRole.name;
+        _incidents[index].timeline.add(IncidentUpdate(
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+          updateText: 'Resolution requested by ${_currentRole.name.toUpperCase()}.',
+        ));
+      });
+    }
 
     try {
       await FirebaseDatabase.instance
@@ -244,6 +302,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     var filteredIncidents = _incidents.where((i) {
+      // 1. Role/Team-based visibility
+      if (_currentRole == UserRole.admin) {
+        // Admin sees everything
+      } else {
+        // Teams only see incidents assigned to them
+        if (_currentTeamId == null || !i.assignedTeams.contains(_currentTeamId)) {
+          return false;
+        }
+      }
+
+      // 2. Search & Category Filters
       final text = _searchQuery.toLowerCase();
       final textMatch = i.type.name.toLowerCase().contains(text) || i.affectedZone.toLowerCase().contains(text);
       final typeMatch = _filterType == null || i.type == _filterType;
@@ -251,8 +320,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }).toList();
 
     var filteredAlerts = _rawAlerts.where((a) {
-      final text = _searchQuery.toLowerCase();
+      // 1. Role-based visibility
+      if (_currentRole != UserRole.admin) {
+        // Non-admins don't see raw pending alerts (they only see assigned incidents)
+        return false;
+      }
+
+      // 2. Search & Category Filters
       final typeName = (a.type ?? EmergencyType.other).name.toLowerCase();
+      final text = _searchQuery.toLowerCase();
       final textMatch = typeName.contains(text) ||
           a.roomNumber.toLowerCase().contains(text) ||
           a.description.toLowerCase().contains(text);
@@ -260,20 +336,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return textMatch && typeMatch;
     }).toList();
 
-    var activeIncidents = filteredIncidents.where((i) => i.status != IncidentStatus.resolved).toList();
+    var activeIncidents = filteredIncidents.where((i) => i.status != IncidentStatus.resolved && i.status != IncidentStatus.reviewPending).toList();
+    var pendingReviewIncidents = filteredIncidents.where((i) => i.status == IncidentStatus.reviewPending).toList();
     var resolvedIncidents = filteredIncidents.where((i) => i.status == IncidentStatus.resolved).toList();
 
     if (_sortBy == 'severity') {
       activeIncidents.sort((a, b) => b.severity.compareTo(a.severity));
+      pendingReviewIncidents.sort((a, b) => b.severity.compareTo(a.severity));
       resolvedIncidents.sort((a, b) => b.severity.compareTo(a.severity));
       filteredAlerts.sort((a, b) => (b.severity ?? 3).compareTo(a.severity ?? 3));
     } else {
       activeIncidents.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      pendingReviewIncidents.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       resolvedIncidents.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       filteredAlerts.sort((a, b) => b.timestamp.compareTo(a.timestamp));
     }
 
-    final int totalCount = activeIncidents.length + _rawAlerts.length;
+    final int totalCount = activeIncidents.length + pendingReviewIncidents.length + filteredAlerts.length;
 
     return Scaffold(
       appBar: AppBar(
@@ -309,34 +388,68 @@ class _DashboardScreenState extends State<DashboardScreen> {
               onPressed: _clearDatabase,
             ),
             const SizedBox(width: 8),
+            // Show switcher if the actual logged in user is Admin/Management
+            if (_originalRole == UserRole.admin || _originalRole == UserRole.management)
+              ToggleButtons(
+                isSelected: _demoTeams.values.map((t) => _currentTeamId == t['teamId'] || (_currentRole == UserRole.admin && t['teamId'] == 'hq')).toList(),
+                onPressed: (int index) {
+                  final teamKey = _demoTeams.keys.elementAt(index);
+                  final teamData = _demoTeams[teamKey]!;
+                  setState(() {
+                    _currentRole = teamData['role'] as UserRole;
+                    _currentTeamId = teamData['teamId'] as String;
+                    if (_currentTeamId == 'hq') _currentTeamId = null; // Admin sees all
+                  });
+                },
+                color: Colors.white54,
+                selectedColor: Colors.white,
+                fillColor: Colors.blueAccent.withValues(alpha: 0.2),
+                borderColor: Colors.white12,
+                selectedBorderColor: Colors.blueAccent,
+                borderRadius: BorderRadius.circular(8),
+                constraints: const BoxConstraints(minHeight: 36, minWidth: 65),
+                children: _demoTeams.keys.map((name) => Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                  child: Text(name, style: const TextStyle(fontSize: 11)),
+                )).toList(),
+              ),
+            const SizedBox(width: 16),
             PopupMenuButton<String>(
               offset: const Offset(0, 45),
               color: Colors.grey[900],
+              tooltip: '${_currentRole.name.toUpperCase()} Profile',
               icon: const CircleAvatar(
                 backgroundColor: Colors.grey,
                 child: Icon(Icons.person, color: Colors.white),
               ),
-              onSelected: (value) {
+              onSelected: (value) async {
                 if (value == 'logout') {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Logging out...')),
-                  );
+                  await FirebaseAuth.instance.signOut();
+                  // _AuthGate stream in main.dart auto-navigates to LoginScreen
                 } else if (value == 'settings') {
                   showDialog(
                     context: context,
-                    builder: (context) => const StaffProfileDialog(initialTab: 1),
+                    builder: (context) => StaffProfileDialog(
+                      initialTab: 1,
+                      currentRole: _currentRole,
+                      onRoleChanged: (role) => setState(() => _currentRole = role),
+                    ),
                   );
                 } else if (value == 'profile') {
                   showDialog(
                     context: context,
-                    builder: (context) => const StaffProfileDialog(initialTab: 0),
+                    builder: (context) => StaffProfileDialog(
+                      initialTab: 0,
+                      currentRole: _currentRole,
+                      onRoleChanged: (role) => setState(() => _currentRole = role),
+                    ),
                   );
                 }
               },
               itemBuilder: (BuildContext context) => [
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'profile',
-                  child: Row(children: [Icon(Icons.badge, color: Colors.white), SizedBox(width: 8), Text('Admin Profile', style: TextStyle(color: Colors.white))]),
+                  child: Row(children: [const Icon(Icons.badge, color: Colors.white), const SizedBox(width: 8), Text('${_currentRole.name.toUpperCase()} Profile', style: const TextStyle(color: Colors.white))]),
                 ),
                 const PopupMenuItem(
                   value: 'settings',
@@ -442,6 +555,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                         ...activeIncidents.map((incident) => IncidentCard(
                           incidentData: incident,
+                          currentRole: _currentRole,
                           onAssign: () => _showAssignDialog(context, incident.id),
                           onEscalate: () => _escalateIncident(incident.id),
                           onResolve: () => _resolveIncident(incident.id),
@@ -461,10 +575,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           opacity: 0.6,
                           child: IncidentCard(
                             incidentData: incident,
+                            currentRole: _currentRole,
                             onAssign: () {},
                             onEscalate: () {},
                             onResolve: () {}, // Already resolved
                           ),
+                        )),
+                      ],
+
+                      // ── Pending Review section ──────────────────────────
+                      if (pendingReviewIncidents.isNotEmpty) ...[
+                        const Padding(
+                          padding: EdgeInsets.fromLTRB(16, 24, 16, 4),
+                          child: Text(
+                            'REVIEW PENDING',
+                            style: TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold, letterSpacing: 1.2, fontSize: 11),
+                          ),
+                        ),
+                        ...pendingReviewIncidents.map((incident) => IncidentCard(
+                          incidentData: incident,
+                          currentRole: _currentRole,
+                          onAssign: () => _showAssignDialog(context, incident.id),
+                          onEscalate: () => _escalateIncident(incident.id),
+                          onResolve: () => _resolveIncident(incident.id),
                         )),
                       ],
 
@@ -481,7 +614,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ],
 
                       // ── Empty state ─────────────────────────────────────────
-                      if (activeIncidents.isEmpty && resolvedIncidents.isEmpty && filteredAlerts.isEmpty)
+                      if (activeIncidents.isEmpty && resolvedIncidents.isEmpty && pendingReviewIncidents.isEmpty && filteredAlerts.isEmpty)
                         SizedBox(
                           height: 400,
                           child: Center(
@@ -630,34 +763,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _showAssignDialog(BuildContext context, String incidentId) {
-    final List<String> staffList = [
-      'Security Team A',
-      'Medical Response 1',
-      'Floor Manager',
-      'Maintenance Crew',
-    ];
+    final Map<String, String> teamList = {
+      'Security Team 1': 'sec_01',
+      'Security Team 2': 'sec_02',
+      'Medical Alpha': 'med_alpha',
+      'Medical Beta': 'med_beta',
+      'Maintenance': 'maint_01',
+    };
 
     showDialog(
       context: context,
       builder: (BuildContext ctx) {
         return AlertDialog(
           backgroundColor: Colors.grey[900],
-          title: const Text('Assign Staff', style: TextStyle(color: Colors.white)),
+          title: const Text('Assign Team', style: TextStyle(color: Colors.white)),
           content: SizedBox(
             width: 300,
-            child: ListView.builder(
+            child: ListView(
               shrinkWrap: true,
-              itemCount: staffList.length,
-              itemBuilder: (context, i) {
+              children: teamList.entries.map((entry) {
                 return ListTile(
-                  leading: const CircleAvatar(child: Icon(Icons.person, size: 16)),
-                  title: Text(staffList[i], style: const TextStyle(color: Colors.white)),
+                  leading: const CircleAvatar(child: Icon(Icons.people, size: 16)),
+                  title: Text(entry.key, style: const TextStyle(color: Colors.white)),
                   onTap: () {
                     Navigator.pop(ctx);
-                    _assignStaff(incidentId, staffList[i]);
+                    _assignStaff(incidentId, entry.key, entry.value);
                   },
                 );
-              },
+              }).toList(),
             ),
           ),
           actions: [
@@ -674,7 +807,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
 class StaffProfileDialog extends StatefulWidget {
   final int initialTab;
-  const StaffProfileDialog({super.key, this.initialTab = 0});
+  final UserRole currentRole;
+  final Function(UserRole) onRoleChanged;
+
+  const StaffProfileDialog({
+    super.key,
+    this.initialTab = 0,
+    required this.currentRole,
+    required this.onRoleChanged,
+  });
 
   @override
   State<StaffProfileDialog> createState() => _StaffProfileDialogState();
@@ -682,11 +823,13 @@ class StaffProfileDialog extends StatefulWidget {
 
 class _StaffProfileDialogState extends State<StaffProfileDialog> {
   late int _selectedTab;
+  late UserRole _localRole;
 
   @override
   void initState() {
     super.initState();
     _selectedTab = widget.initialTab;
+    _localRole = widget.currentRole;
   }
 
   @override
@@ -715,7 +858,7 @@ class _StaffProfileDialogState extends State<StaffProfileDialog> {
                     child: Icon(Icons.person, size: 30, color: Colors.white),
                   ),
                   const SizedBox(height: 10),
-                  const Text('Admin', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  Text(_getRoleDisplayName(_localRole), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                   const Text('Command Center', style: TextStyle(color: Colors.white54, fontSize: 11)),
                   const SizedBox(height: 20),
                   ListTile(
@@ -756,7 +899,40 @@ class _StaffProfileDialogState extends State<StaffProfileDialog> {
         const Divider(color: Colors.white12),
         const SizedBox(height: 16),
         _infoRow('Name', 'Admin User'),
-        _infoRow('Role', 'System Administrator'),
+        
+        // Role Dropdown for Demo
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8.0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const SizedBox(width: 100, child: Text('Role (Demo)', style: TextStyle(color: Colors.white54))),
+              Expanded(
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<UserRole>(
+                    dropdownColor: Colors.grey[850],
+                    value: _localRole,
+                    isDense: true,
+                    style: const TextStyle(color: Colors.white),
+                    items: UserRole.values.map((role) {
+                      return DropdownMenuItem<UserRole>(
+                        value: role,
+                        child: Text(_getRoleDisplayName(role)),
+                      );
+                    }).toList(),
+                    onChanged: (newRole) {
+                      if (newRole != null) {
+                        setState(() => _localRole = newRole);
+                        widget.onRoleChanged(newRole);
+                      }
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
         _infoRow('ID', 'EMP-001'),
         _infoRow('Department', 'Command Center'),
         _infoRow('Clearance', 'Level 5 (Max)'),
@@ -800,5 +976,15 @@ class _StaffProfileDialogState extends State<StaffProfileDialog> {
         ],
       ),
     );
+  }
+
+  String _getRoleDisplayName(UserRole role) {
+    switch (role) {
+      case UserRole.admin: return 'System Administrator';
+      case UserRole.management: return 'Management';
+      case UserRole.security: return 'Security';
+      case UserRole.medical: return 'Medical';
+      case UserRole.guest: return 'Guest';
+    }
   }
 }
