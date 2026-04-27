@@ -503,25 +503,123 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.black,
+      // ── Pinned SOS button — always visible, never fights for space ──
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              GestureDetector(
+                onTap: () {
+                  if (_selectedEmergencyType != null) {
+                    _triggerSOS();
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(AppLocalizations.of(context)!.errorGeneric),
+                        backgroundColor: Colors.orange,
+                        duration: const Duration(milliseconds: 1500),
+                      ),
+                    );
+                  }
+                },
+                child: AnimatedBuilder(
+                  animation: _pulseController,
+                  builder: (context, child) {
+                    final double glow = _selectedEmergencyType != null
+                        ? (_pulseController.value * 12.0)
+                        : 0.0;
+                    final double scale = _selectedEmergencyType != null
+                        ? 1.0 + (_pulseController.value * 0.025)
+                        : 1.0;
+                    return Transform.scale(
+                      scale: scale,
+                      child: Container(
+                        height: 64,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(20),
+                          gradient: LinearGradient(
+                            colors: _selectedEmergencyType != null
+                                ? [Colors.red[700]!, Colors.redAccent]
+                                : [Colors.grey[800]!, Colors.grey[850]!],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: _selectedEmergencyType != null
+                                  ? Colors.redAccent.withValues(alpha: 0.5)
+                                  : Colors.transparent,
+                              blurRadius: 16 + glow,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: Center(
+                          child: _isSubmitting
+                              ? const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)),
+                                    SizedBox(width: 12),
+                                    Text('SENDING...', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 2)),
+                                  ],
+                                )
+                              : Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 26),
+                                    const SizedBox(width: 10),
+                                    Text(
+                                      AppLocalizations.of(context)!.sosButtonLabel,
+                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 22, letterSpacing: 3),
+                                    ),
+                                  ],
+                                ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Hold connection for real-time status.',
+                    style: TextStyle(color: Colors.white.withValues(alpha: 0.25), fontSize: 10),
+                  ),
+                  TextButton(
+                    style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                    onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RejoinScreen())),
+                    child: const Text('Rejoin SOS →', style: TextStyle(color: Colors.white30, fontSize: 10, decoration: TextDecoration.underline)),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Colors.black,
-              Colors.blueGrey[900]!,
-            ],
+            colors: [Colors.black, Colors.blueGrey[900]!],
           ),
         ),
         child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16.0),
+          child: CustomScrollView(
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+
+                    // ── HEADER ──────────────────────────────────────────
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10.0),
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
@@ -842,241 +940,119 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
                     ),
                   ),
                 ),
-                const SizedBox(height: 24),
-                
-                Text(
-                  AppLocalizations.of(context)!.sosTypeLabel,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                
-                Expanded(
-                  flex: 2,
-                  child: Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    alignment: WrapAlignment.center,
-                    children: _emergencyTypes.map((type) => _buildEmergencyTypeCard(type)).toList(),
-                  ),
-                ),
-                
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _buildMicButton(),
-                    _buildActionButton(
-                      _attachedImage != null ? Icons.check_circle : Icons.camera_alt,
-                      _attachedImage != null
-                        ? AppLocalizations.of(context)!.sosRemovePhoto
-                        : AppLocalizations.of(context)!.sosAttachPhoto,
-                      _attachPhoto,
-                      color: _attachedImage != null ? Colors.green[700] : Colors.grey[850],
+                    const SizedBox(height: 16),
+
+                    // ── CATEGORY SELECTOR (horizontal scroll chips) ──
+                    Text(
+                      AppLocalizations.of(context)!.sosTypeLabel,
+                      style: const TextStyle(color: Colors.white54, fontSize: 12, letterSpacing: 1),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                TextField(
-                  controller: _descController,
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
-                  decoration: InputDecoration(
-                    hintText: AppLocalizations.of(context)!.sosDescriptionHint,
-                    hintStyle: const TextStyle(color: Colors.white54),
-                    filled: true,
-                    fillColor: Colors.grey[850],
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                    prefixIcon: const Icon(Icons.edit, color: Colors.white54, size: 18),
-                  ),
-                  maxLines: 3,
-                  minLines: 1,
-                ),
-                const SizedBox(height: 20),
-                
-                Expanded(
-                  flex: 3,
-                  child: Center(
-                    child: GestureDetector(
-                      onTap: () {
-                        if (_selectedEmergencyType != null) {
-                          _triggerSOS();
-                        } else {
-                          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(AppLocalizations.of(context)!.errorGeneric),
-                              backgroundColor: Colors.orange,
-                              duration: const Duration(milliseconds: 1500),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      height: 48,
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        children: _emergencyTypes.map((type) => _buildEmergencyTypeChip(type)).toList(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // ── DESCRIPTION INPUT with embedded icon buttons ──
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.grey[900],
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.white12),
+                      ),
+                      child: Column(
+                        children: [
+                          TextField(
+                            controller: _descController,
+                            style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.5),
+                            maxLines: null,
+                            minLines: 3,
+                            keyboardType: TextInputType.multiline,
+                            decoration: InputDecoration(
+                              hintText: AppLocalizations.of(context)!.sosDescriptionHint,
+                              hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
+                              filled: true,
+                              fillColor: Colors.transparent,
+                              contentPadding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+                              border: InputBorder.none,
                             ),
-                          );
-                        }
-                      },
-                      child: AnimatedBuilder(
-                        animation: _pulseController,
-                        builder: (context, child) {
-                          final double scale = _selectedEmergencyType != null 
-                              ? 1.0 + (_pulseController.value * 0.05) 
-                              : 1.0;
-                          final double glow = _selectedEmergencyType != null 
-                              ? (_pulseController.value * 15.0) 
-                              : 0.0;
-                              
-                          return Transform.scale(
-                            scale: scale,
-                            child: Container(
-                              width: 170,
-                              height: 170,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                gradient: LinearGradient(
-                                  colors: _selectedEmergencyType != null 
-                                      ? [Colors.redAccent, Colors.red[900]!] 
-                                      : [Colors.grey[800]!, Colors.grey[900]!],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: _selectedEmergencyType != null 
-                                        ? Colors.redAccent.withValues(alpha: 0.6) 
-                                        : Colors.black54,
-                                    blurRadius: 20 + glow,
-                                    spreadRadius: 5 + (glow * 0.5),
+                          ),
+                          // Icon button row inside the card
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                            child: Row(
+                              children: [
+                                // Mic button
+                                ValueListenableBuilder(
+                                  valueListenable: ValueNotifier(_isListening),
+                                  builder: (context, _, __) => InkWell(
+                                    borderRadius: BorderRadius.circular(8),
+                                    onTap: _toggleListen,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: _isListening ? Colors.red.withValues(alpha: 0.2) : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            _isListening ? Icons.mic : Icons.mic_none,
+                                            color: _isListening ? Colors.redAccent : Colors.white54,
+                                            size: 18,
+                                          ),
+                                          if (_isListening) ...[
+                                            const SizedBox(width: 4),
+                                            const Text('REC', style: TextStyle(color: Colors.redAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
                                   ),
-                                ]
-                              ),
-                              child: Center(
-                                child: _isSubmitting 
-                                  ? Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
+                                ),
+                                // Camera button
+                                InkWell(
+                                  borderRadius: BorderRadius.circular(8),
+                                  onTap: _attachPhoto,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: _attachedImage != null ? Colors.green.withValues(alpha: 0.2) : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        const CircularProgressIndicator(color: Colors.white),
-                                        const SizedBox(height: 12),
-                                        Text(AppLocalizations.of(context)!.sosSending,
-                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                      ],
-                                    )
-                                  : Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        const Icon(Icons.warning_amber_rounded, size: 50, color: Colors.white),
-                                        const SizedBox(height: 8),
+                                        Icon(
+                                          _attachedImage != null ? Icons.check_circle : Icons.camera_alt,
+                                          color: _attachedImage != null ? Colors.greenAccent : Colors.white54,
+                                          size: 18,
+                                        ),
+                                        const SizedBox(width: 4),
                                         Text(
-                                          AppLocalizations.of(context)!.sosButtonLabel,
-                                          style: const TextStyle(
-                                            color: Colors.white, 
-                                            fontSize: 32, 
-                                            fontWeight: FontWeight.w900, 
-                                            letterSpacing: 2
+                                          _attachedImage != null ? 'Photo attached' : 'Photo',
+                                          style: TextStyle(
+                                            color: _attachedImage != null ? Colors.greenAccent : Colors.white38,
+                                            fontSize: 11,
                                           ),
                                         ),
                                       ],
                                     ),
-                              ),
+                                  ),
+                                ),
+                              ],
                             ),
-                          );
-                        },
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                ),
-                
-                const SizedBox(height: 10),
-                const Text(
-                  'Hold connection for real-time status after triggering.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white38, fontSize: 12),
-                ),
-                const SizedBox(height: 8),
-                TextButton(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const RejoinScreen()),
-                  ),
-                  child: const Text(
-                    'Already sent an SOS? Rejoin →',
-                    style: TextStyle(color: Colors.white30, fontSize: 12, decoration: TextDecoration.underline),
-                  ),
-                ),
-                const SizedBox(height: 10),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmergencyTypeCard(Map<String, dynamic> type) {
-    bool isSelected = _selectedEmergencyType == type['id'];
-    Color typeColor = type['color'] as Color;
-    
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          HapticFeedback.lightImpact();
-          setState(() {
-            _selectedEmergencyType = type['id'];
-          });
-        },
-        borderRadius: BorderRadius.circular(20),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOutCubic,
-          width: (MediaQuery.of(context).size.width * 0.28).clamp(80.0, 110.0),
-          height: 105,
-          decoration: BoxDecoration(
-            gradient: isSelected 
-                ? LinearGradient(
-                    colors: [
-                      typeColor.withValues(alpha: 0.4), 
-                      typeColor.withValues(alpha: 0.1)
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  )
-                : LinearGradient(
-                    colors: [Colors.grey[850]!, Colors.grey[900]!],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: isSelected ? typeColor.withValues(alpha: 0.8) : Colors.transparent,
-              width: 1.5,
-            ),
-            boxShadow: isSelected 
-                ? [
-                    BoxShadow(
-                      color: typeColor.withValues(alpha: 0.2),
-                      blurRadius: 10,
-                      spreadRadius: 1,
-                    )
-                  ] 
-                : [],
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              AnimatedScale(
-                scale: isSelected ? 1.1 : 1.0,
-                duration: const Duration(milliseconds: 200),
-                child: Icon(
-                  type['icon'], 
-                  color: isSelected ? typeColor : Colors.white54, 
-                  size: 32
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                _getLocalizedTypeName(context, type['id']),
-                style: TextStyle(
-                  color: isSelected ? Colors.white : Colors.white54,
-                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400,
-                  fontSize: 12,
+                    const SizedBox(height: 16),
+                  ]),
                 ),
               ),
             ],
@@ -1086,78 +1062,46 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
     );
   }
 
-  Widget _buildActionButton(IconData icon, String label, VoidCallback onPressed, {Color? color}) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(30),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
-            blurRadius: 5,
-            offset: const Offset(0, 3),
-          )
-        ],
-      ),
-      child: ElevatedButton.icon(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: color ?? Colors.grey[850],
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-          elevation: 0,
+  Widget _buildEmergencyTypeChip(Map<String, dynamic> type) {
+    final bool isSelected = _selectedEmergencyType == type['id'];
+    final Color typeColor = type['color'] as Color;
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        setState(() => _selectedEmergencyType = type['id']);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        margin: const EdgeInsets.only(right: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? typeColor.withValues(alpha: 0.25) : Colors.grey[900],
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: isSelected ? typeColor : Colors.white12,
+            width: isSelected ? 1.5 : 1,
+          ),
         ),
-        onPressed: onPressed,
-        icon: Icon(icon, size: 18),
-        label: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(type['icon'] as IconData, color: isSelected ? typeColor : Colors.white38, size: 18),
+            const SizedBox(width: 8),
+            Text(
+              _getLocalizedTypeName(context, type['id']),
+              style: TextStyle(
+                color: isSelected ? Colors.white : Colors.white54,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildMicButton() {
-    // Normal scale is 1.0. When listening, soundLevel (usually between -50 and 50) scales the button.
-    // For normalization, assuming level goes up to 10 in standard conversation.
-    final glowScale = _isListening ? 1.0 + (_soundLevel.clamp(0.0, 50.0) / 100.0) : 1.0;
-    
-    return GestureDetector(
-      onTap: _toggleListen,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 100),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(30),
-          boxShadow: [
-            BoxShadow(
-              color: _isListening 
-                ? Colors.redAccent.withValues(alpha: 0.5 * glowScale) 
-                : Colors.black.withValues(alpha: 0.2),
-              blurRadius: _isListening ? 15 * glowScale : 5,
-              spreadRadius: _isListening ? 3 * glowScale : 0,
-              offset: const Offset(0, 3),
-            )
-          ],
-        ),
-        child: Badge(
-           isLabelVisible: _isListening,
-           label: const Text('REC', style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold)),
-           backgroundColor: Colors.red,
-           child: Transform.scale(
-             scale: glowScale,
-             child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _isListening ? Colors.red[900] : Colors.grey[850],
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                elevation: 0,
-              ),
-              onPressed: _toggleListen,
-              icon: Icon(_isListening ? Icons.mic : Icons.mic_none, size: 18),
-              label: Text(_isListening ? 'Listening' : 'Voice Input', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-            ),
-           ),
-        ),
-      ),
-    );
-  }
+
 
   Future<void> _triggerSOS() async {
     if (_isSubmitting) return;

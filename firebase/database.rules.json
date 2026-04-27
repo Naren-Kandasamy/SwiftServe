@@ -10,8 +10,15 @@
           }
         },
         "incidents": {
+          // Any authenticated user (including guests) can READ incidents to see their AI response
           ".read": "auth != null",
+          // Only staff (non-anonymous) can WRITE incidents
           ".write": "auth != null && auth.token.firebase.sign_in_provider != 'anonymous'"
+        },
+        "roomTokens": {
+          // Guests need to read/write their own room token for check-in
+          ".read": "auth != null",
+          ".write": "auth != null"
         },
         "messages": {
           ".read": "auth != null",
