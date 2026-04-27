@@ -1,10 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter_gemma/flutter_gemma.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:flutter/foundation.dart';
-import 'model_manager.dart';
 import 'offline_knowledge.dart';
 import 'package:shared/models/alert.dart';
 
@@ -12,7 +12,6 @@ enum TriageSource {
   cloud('Gemini 1.5 Pro'), 
   native('Edge Intelligence (NPU)'), 
   universal('CrisisNET AI (Offline)'), 
-  web('Local Intel (Ollama)'),
   local('Heuristic Protocol');
 
   final String label;
@@ -21,7 +20,6 @@ enum TriageSource {
 
 class LocalTriageService {
   final String apiKey;
-  static const MethodChannel _channel = MethodChannel('com.crisisnet.guest_app/ai_bridge');
 
   LocalTriageService({required this.apiKey});
 
@@ -57,8 +55,46 @@ class LocalTriageService {
         debugPrint('[Triage] Attempting Tier 1 (Cloud)...');
         final response = await _cloudTriage(description).timeout(const Duration(seconds: 4));
         if (response != null) {
+          try {
+            final json = _parseJson(response);
+            return {
+              'source': TriageSource.cloud,
+              'content': json['immediateInstructions'] ?? json['safetyInstructions'] ?? response,
+              'type': json['type'] ?? type,
+              'severity': json['severity'] ?? severity,
+              'assetPath': OfflineKnowledgeService.getAssetPath(_getEmergencyType(json['type'] ?? type)),
+            };
+          } catch (e) {
+            // If it failed to parse JSON, return string
+            return {
+              'source': TriageSource.cloud,
+              'content': response,
+              'type': type,
+              'severity': severity,
+              'assetPath': OfflineKnowledgeService.getAssetPath(_getEmergencyType(type)),
+            };
+          }
+        }
+      }
+    } catch (_) {}
+
+    // TIER 2: NATIVE EDGE (Gemma)
+    try {
+      debugPrint('[Triage] Attempting Tier 2 (Native Gemma)...');
+      final response = await _gemmaTriage(description);
+      if (response != null) {
+        try {
+          final json = _parseJson(response);
           return {
-            'source': TriageSource.cloud,
+            'source': TriageSource.native,
+            'content': json['immediateInstructions'] ?? json['safetyInstructions'] ?? response,
+            'type': json['type'] ?? type,
+            'severity': json['severity'] ?? severity,
+            'assetPath': OfflineKnowledgeService.getAssetPath(_getEmergencyType(json['type'] ?? type)),
+          };
+        } catch (e) {
+          return {
+            'source': TriageSource.native,
             'content': response,
             'type': type,
             'severity': severity,
@@ -66,32 +102,12 @@ class LocalTriageService {
           };
         }
       }
-    } catch (_) {}
-
-    // TIER 2: OLLAMA (Local Desktop/Web Intelligence)
-    try {
-      debugPrint('[Triage] Attempting Tier 2 (Ollama Service)...');
-      final response = await _ollamaTriage(description);
-      if (response != null) {
-        String content = response;
-        
-        // Output from the few-shot /api/chat model is strictly the instruction text.
-        // We rely on the local _detectType(description) function that ran earlier to supply `type` and `severity`.
-
-        return {
-          'source': TriageSource.universal,
-          'content': content,
-          'type': type,
-          'severity': severity,
-          'assetPath': OfflineKnowledgeService.getAssetPath(_getEmergencyType(type)),
-        };
-      }
     } catch (e) {
-      debugPrint('[Triage] Ollama Triage failed: $e. Falling back to Keyword Classifier.');
+      debugPrint('[Triage] Gemma Triage failed: $e');
     }
 
-    // TIER 2 FAILED: Immediate fallback to Keyword Classifier + Predefined Protocols
-    debugPrint('[Triage] Ollama unavailable. Activating Keyword Classifier...');
+    // TIER 3 FAILED: Immediate fallback to Keyword Classifier + Predefined Protocols
+    debugPrint('[Triage] All AI tiers unavailable. Activating Keyword Classifier...');
     return {
       'source': TriageSource.local,
       'content': _keywordClassify(description),
@@ -99,6 +115,18 @@ class LocalTriageService {
       'severity': severity,
       'assetPath': OfflineKnowledgeService.getAssetPath(_getEmergencyType(type)),
     };
+  }
+
+  Map<String, dynamic> _parseJson(String text) {
+    try {
+      final jsonMatch = RegExp(r'\{.*\}', dotAll: true).firstMatch(text);
+      if (jsonMatch != null) {
+        return jsonDecode(jsonMatch.group(0)!);
+      }
+      return jsonDecode(text);
+    } catch (e) {
+      throw FormatException('Failed to parse JSON');
+    }
   }
 
 
@@ -119,55 +147,44 @@ class LocalTriageService {
     }
   }
 
-  Future<String?> _ollamaTriage(String description) async {
+  Future<String?> _gemmaTriage(String description) async {
+    if (!FlutterGemma.hasActiveModel()) return null;
     try {
-      final baseUrl = kIsWeb ? 'http://localhost:11434' : 'http://10.0.2.2:11434';
+      final model = await FlutterGemma.getActiveModel(maxTokens: 512);
+      final chat = await model.createChat();
+      
+      final prompt = '''
+You are a tactical emergency response AI. Classify the incoming guest SOS alert and provide IMMEDIATE, ACTIONABLE life-saving instructions.
+DO NOT give generic "Call 911" advice. Assume the user is in immediate danger and help is minutes away.
 
-      final response = await _dio.post(
-        '$baseUrl/api/chat',
-        data: {
-          'model': 'qwen:0.5b',
-          'messages': [
-            {
-              'role': 'system',
-              'content': 'You are an offline tactical survival AI. You provide exactly 3 to 5 highly detailed and distinct physical actions the user must take immediately to survive by themselves. Assume phones and internet do not work. Be highly specific and commanding and do not ask them to call for emergency services. Give instructions such that they can handle the situation themselves.'
-            },
-            {
-              'role': 'user',
-              'content': 'I stepped on glass and my foot is bleeding heavily.'
-            },
-            {
-              'role': 'assistant',
-              'content': '1. Apply immediate, heavy pressure directly to the wound using a clean shirt or towel to stop the bleeding.\n2. Elevate your leg above your heart level to reduce blood flow to the injury.\n3. Do not pull out deeply embedded shards; wrap your makeshift bandage completely around them.\n4. Lie down flat on the floor to prevent fainting from shock or blood loss.\n5. Tie the fabric tightly to maintain pressure and keep all weight off the injured foot.'
-            },
-            {
-              'role': 'user',
-              'content': 'I am trapped in an elevator and it just dropped suddenly.'
-            },
-            {
-              'role': 'assistant',
-              'content': '1. Lie flat on your back in the exact center of the elevator floor immediately.\n2. Cover your face and head with your arms to protect against falling debris.\n3. Do not attempt to force the doors open; this risks falling into the shaft.\n4. Conserve your energy and oxygen; breathe slowly and stay as quiet as possible.\n5. Use a flashlight or phone screen only to check for immediate hazards, then turn it off to save battery.'
-            },
-            {
-              'role': 'user',
-              'content': description
-            }
-          ],
-          'stream': false,
-          'options': {'temperature': 0.15, 'top_p': 0.9, 'presence_penalty': 1.5},
-        },
-      ).timeout(const Duration(seconds: 15));
+Instructions should be:
+1. Tactical (e.g., "Stay low under smoke", "Apply pressure with clean cloth", "Barricade the door").
+2. Bulleted (3-4 points).
+3. In the same language as the SOS message.
 
-      if (response.statusCode == 200) {
-        final content = response.data['message']['content'] as String;
-        // The model output usually starts exactly with "1. ...".
-        return content.trim();
+Output format (STRICT JSON):
+{
+  "type": "fire" | "medical" | "security" | "infrastructure" | "other",
+  "severity": <integer 1-5>,
+  "immediateInstructions": "1. [First tactical step]\\n2. [Second tactical step]\\n3. [Third tactical step]",
+  "escalateToEmergencyServices": <boolean>
+}
+
+Guest SOS Message: "$description"
+''';
+      await chat.addQuery(Message(text: prompt, isUser: true));
+      final response = await chat.generateChatResponse();
+      await chat.close();
+      await model.close();
+      if (response is TextResponse) {
+        return response.token;
       }
     } catch (e) {
-      debugPrint('[Ollama] API Error: $e');
+      debugPrint('[Gemma] Error: $e');
     }
     return null;
   }
+
 
   EmergencyType _getEmergencyType(String typeStr) {
     return EmergencyType.values.firstWhere(
@@ -181,10 +198,30 @@ class LocalTriageService {
     final model = GenerativeModel(
       model: 'gemini-1.5-flash', 
       apiKey: apiKey,
-      generationConfig: GenerationConfig(maxOutputTokens: 200),
+      generationConfig: GenerationConfig(maxOutputTokens: 300),
     );
     
-    final prompt = 'EMERGENCY TRIAGE: A guest reports: "$description". Provide 3 short, critical safety instructions in bullet points.';
+    final prompt = '''
+You are an emergency triage AI for a hospitality venue.
+Classify the incoming guest SOS alert and return ONLY valid JSON.
+
+MULTILINGUAL SUPPORT: Detect the language of the SOS message. The `immediateInstructions` MUST be in the same language.
+
+Severity scale 1–5:
+1 = Minor nuisance. 2 = Low concern. 3 = Active incident (staff needed).
+4 = Serious (emergency services likely needed). 5 = Mass casualty / catastrophic.
+
+Output format:
+{
+  "type": "fire" | "medical" | "security" | "infrastructure" | "other",
+  "severity": <integer 1-5>,
+  "immediateInstructions": "<3-4 sentence safety instruction IN GUEST'S LANGUAGE>",
+  "language": "<ISO 639-1 code>",
+  "escalateToEmergencyServices": <boolean>
+}
+
+Guest SOS Message: "$description"
+''';
     final response = await model.generateContent([Content.text(prompt)]);
     return response.text;
   }
@@ -195,7 +232,7 @@ class LocalTriageService {
     final d = description.toLowerCase();
     
     // MEDICAL REASONING BLOCKS
-    if (d.contains('medical') || d.contains('hurt') || d.contains('bleed') || d.contains('heart') || d.contains('breath') || d.contains('stroke') || d.contains('face')) {
+    if (d.contains('medical') || d.contains('hurt') || d.contains('bleed') || d.contains('heart') || d.contains('breath') || d.contains('stroke') || d.contains('face') || d.contains('cut') || d.contains('dizzy') || d.contains('collapse') || d.contains('unconscious') || d.contains('choke') || d.contains('cough')) {
       if (d.contains('choke') || d.contains('cough')) {
         return 'EMERGENCY: CHOKING\n'
                '1. RECOGNITION: If they cannot speak or cough, perform 5 abdominal thrusts (Heimlich).\n'
@@ -214,8 +251,8 @@ class LocalTriageService {
                '2. LOOSEN: Remove any tight ties, collars, or belts immediately.\n'
                '3. MEDS: If conscious/not-allergic, have them chew an aspirin. AED unit nearby.';
       }
-      if (d.contains('bleed')) {
-        return 'MERGENCY: SEVERE BLEEDING\n'
+      if (d.contains('bleed') || d.contains('cut') || d.contains('stab')) {
+        return 'EMERGENCY: SEVERE BLEEDING\n'
                '1. PRESSURE: Apply heavy, direct pressure with a clean cloth.\n'
                '2. ELEVATE: Keep the wound above heart level if possible.\n'
                '3. DO NOT remove the cloth even if soaked; add more on top.';
@@ -227,8 +264,8 @@ class LocalTriageService {
     }
 
     // FIRE & INFRA REASONING BLOCKS
-    if (d.contains('fire') || d.contains('smoke') || d.contains('gas') || d.contains('leak') || d.contains('electric')) {
-      if (d.contains('fire') || d.contains('smoke')) {
+    if (d.contains('fire') || d.contains('smoke') || d.contains('gas') || d.contains('leak') || d.contains('electric') || d.contains('burn') || d.contains('spark')) {
+      if (d.contains('fire') || d.contains('smoke') || d.contains('burn')) {
         return 'EMERGENCY: FIRE/SMOKE\n'
                '1. EVACUATE NOW: Leave everything. Use stairs, not elevators.\n'
                '2. HAND CHECK: Feel doors with the back of your hand before opening.\n'
@@ -240,15 +277,15 @@ class LocalTriageService {
                '2. Meet at the external assembly point.\n'
                '3. Move upwind from the suspected leak source.';
       }
-      return 'EMERGENCY: NFRASTRUCTURE\n'
+      return 'EMERGENCY: INFRASTRUCTURE\n'
              '• Avoid all standing water if electricity is a concern.\n'
              '• If trapped, signal from a window with a white cloth.\n'
              '• Stay away from elevators and glass panels.';
     }
     
     // SECURITY REASONING BLOCKS
-    if (d.contains('threat') || d.contains('intruder') || d.contains('gun') || d.contains('shooter') || d.contains('attack')) {
-      if (d.contains('gun') || d.contains('shooter') || d.contains('active')) {
+    if (d.contains('threat') || d.contains('intruder') || d.contains('gun') || d.contains('shooter') || d.contains('attack') || d.contains('knife') || d.contains('weapon')) {
+      if (d.contains('gun') || d.contains('shooter') || d.contains('active') || d.contains('weapon')) {
         return 'EMERGENCY: ACTIVE THREAT (RUN-HIDE-FIGHT)\n'
                '1. RUN: Evacuate if there is a safe path. Leave belongings.\n'
                '2. HIDE: Barricade your door, turn off lights, and silence ALL devices.\n'
@@ -268,17 +305,17 @@ class LocalTriageService {
 
   String _detectType(String description) {
     final d = description.toLowerCase();
-    if (d.contains('fire')) return 'fire';
-    if (d.contains('medical') || d.contains('hurt') || d.contains('pain') || d.contains('breath') || d.contains('heart') || d.contains('bleed')) return 'medical';
-    if (d.contains('intruder') || d.contains('gun') || d.contains('threat') || d.contains('attack')) return 'security';
+    if (d.contains('fire') || d.contains('smoke') || d.contains('burn')) return 'fire';
+    if (d.contains('medical') || d.contains('hurt') || d.contains('pain') || d.contains('breath') || d.contains('heart') || d.contains('bleed') || d.contains('cut') || d.contains('dizzy')) return 'medical';
+    if (d.contains('intruder') || d.contains('gun') || d.contains('threat') || d.contains('attack') || d.contains('weapon') || d.contains('knife')) return 'security';
     if (d.contains('water') || d.contains('leak') || d.contains('power') || d.contains('electric')) return 'infrastructure';
     return 'other';
   }
 
   int _detectSeverity(String description) {
     final d = description.toLowerCase();
-    if (d.contains('help') || d.contains('kill') || d.contains('die')) return 5;
-    if (d.contains('hurt') || d.contains('fire')) return 4;
+    if (d.contains('help') || d.contains('kill') || d.contains('die') || d.contains('gun') || d.contains('fire') || d.contains('heart') || d.contains('shooter')) return 5;
+    if (d.contains('hurt') || d.contains('bleed') || d.contains('smoke') || d.contains('attack')) return 4;
     return 3;
   }
 }

@@ -5,6 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'firebase_options.dart';
 import 'screens/sos_screen.dart';
 import 'screens/status_screen.dart';
@@ -15,6 +16,8 @@ final ValueNotifier<Locale> appLocale = ValueNotifier(const Locale('en'));
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Load environment variables (API keys, etc.) — never committed to git
+  await dotenv.load(fileName: '.env');
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,

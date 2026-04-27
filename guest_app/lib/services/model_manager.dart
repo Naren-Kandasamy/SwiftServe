@@ -1,37 +1,46 @@
-import 'dart:io';
-import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:flutter_gemma/flutter_gemma.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class ModelManager {
   static final ModelManager _instance = ModelManager._internal();
   factory ModelManager() => _instance;
   ModelManager._internal();
 
-  final Dio _dio = Dio();
   final ValueNotifier<double> downloadProgress = ValueNotifier(0.0);
   final ValueNotifier<bool> isDownloading = ValueNotifier(false);
   final ValueNotifier<bool> isModelReady = ValueNotifier(false);
 
-  // Qwen 0.5B — ultra-compact model (~390MB), optimized for mobile offline inference
-  static const String _modelUrl = 'https://huggingface.co/Qwen/Qwen1.5-0.5B-Chat-GGUF/resolve/main/qwen1_5-0_5b-chat-q4_k_m.gguf';
-  static const String _modelFileName = 'qwen-0.5b.gguf';
+  // Gemma 3 270M IT — Q8 Quantized (optimized for mobile offline inference)
+  static const String _modelUrl = 'https://huggingface.co/litert-community/gemma-3-270m-it/resolve/main/gemma3-270m-it-q8.task';
+  static const String _modelId = 'gemma3-270m-it-q8.task';
 
-  /// Check if the model is already present on device.
+  /// Check if the model is already present on device and initialize it.
   Future<void> init() async {
     if (kIsWeb) return;
-    final path = await getLocalModelPath();
-    if (File(path).existsSync()) {
+    
+    // Initialize the FlutterGemma service registry
+    await FlutterGemma.initialize(
+      maxDownloadRetries: 3,
+      huggingFaceToken: dotenv.env['HF_TOKEN'],
+    );
+    
+    final isInstalled = await FlutterGemma.isModelInstalled(_modelId);
+    if (isInstalled) {
       isModelReady.value = true;
+      // Pre-load the active model spec so it's ready for inference
+      try {
+        await FlutterGemma.installModel(
+          modelType: ModelType.gemmaIt,
+          fileType: ModelFileType.task,
+        ).fromNetwork(_modelUrl).install(); // This will just set it as active if already installed
+      } catch (e) {
+        debugPrint('[ModelManager] Failed to set active model: $e');
+      }
     }
   }
 
-  Future<String> getLocalModelPath() async {
-    final directory = await getApplicationDocumentsDirectory();
-    return '${directory.path}/$_modelFileName';
-  }
-
-  /// High-fidelity sync for both Phone and Browser
+  /// High-fidelity sync using FlutterGemma's built-in installer
   Future<void> downloadModel() async {
     if (isDownloading.value || isModelReady.value) return;
 
@@ -39,35 +48,26 @@ class ModelManager {
     downloadProgress.value = 0.0;
     
     if (kIsWeb) {
-      debugPrint('[ModelManager] Web environment detected. Synchronizing Intelligence Core...');
-      // Simulated persistence for browser speed, allowing instant demo
-      double simulatedProgress = 0.0;
-      while (simulatedProgress < 1.0) {
-        await Future.delayed(const Duration(milliseconds: 50));
-        simulatedProgress += 0.04;
-        downloadProgress.value = simulatedProgress.clamp(0.0, 1.0);
-      }
-      isModelReady.value = true;
+      debugPrint('[ModelManager] Web environment detected. Offline Gemma requires native platform.');
       isDownloading.value = false;
       return;
     }
 
     try {
-      final path = await getLocalModelPath();
       debugPrint('[ModelManager] Starting high-fidelity sync from $_modelUrl...');
-      await _dio.download(
-        _modelUrl,
-        path,
-        onReceiveProgress: (received, total) {
-          if (total != -1) {
-            downloadProgress.value = (received / total).clamp(0.0, 1.0);
-          } else {
-            downloadProgress.value = (downloadProgress.value + 0.01).clamp(0.0, 0.99);
-          }
-        },
-      );
+      
+      await FlutterGemma.installModel(
+        modelType: ModelType.gemmaIt,
+        fileType: ModelFileType.task,
+      )
+      .fromNetwork(_modelUrl)
+      .withProgress((progress) {
+        downloadProgress.value = (progress / 100.0).clamp(0.0, 1.0);
+      })
+      .install();
+
       isModelReady.value = true;
-      debugPrint('[ModelManager] Sync complete! Core ready at $path');
+      debugPrint('[ModelManager] Sync complete! Gemma Core ready for inference.');
     } catch (e, stack) {
       debugPrint('[ModelManager] CRITICAL: Download failed!');
       debugPrint('[ModelManager] Error: $e');
@@ -84,12 +84,12 @@ class ModelManager {
       isModelReady.value = false;
       return;
     }
-    final path = await getLocalModelPath();
-    final file = File(path);
-    if (file.existsSync()) {
-      await file.delete();
+    try {
+      await FlutterGemma.uninstallModel(_modelId);
       isModelReady.value = false;
       downloadProgress.value = 0.0;
+    } catch (e) {
+      debugPrint('[ModelManager] Uninstall failed: $e');
     }
   }
 }

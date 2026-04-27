@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_ble_peripheral/flutter_ble_peripheral.dart';
@@ -50,14 +51,15 @@ class BleService {
       final String payloadStr = '$shortId$typeIndex$severity$floor';
       final List<int> payloadBytes = utf8.encode(payloadStr);
 
-      // Build AdvertiseData using the flutter_ble_peripheral 0.3.0 API
-      final advertiseData = AdvertiseData()
-        ..uuid = _serviceUuid
-        ..manufacturerId = _manufacturerId
-        ..manufacturerData = payloadBytes
-        ..includeDeviceName = false;
+      // Build AdvertiseData using the flutter_ble_peripheral 2.1.0 API
+      final advertiseData = AdvertiseData(
+        serviceUuid: _serviceUuid,
+        manufacturerId: _manufacturerId,
+        manufacturerData: Uint8List.fromList(payloadBytes),
+        includeDeviceName: false,
+      );
 
-      await _peripheral.start(advertiseData);
+      await _peripheral.start(advertiseData: advertiseData);
       _seenAlertIds.add(alert.id);
       _isAdvertising = true;
 

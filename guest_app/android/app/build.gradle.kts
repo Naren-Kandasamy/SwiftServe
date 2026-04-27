@@ -39,10 +39,7 @@ android {
     }
 }
 
-dependencies {
-    implementation("com.google.mediapipe:tasks-genai-llm:0.10.14")
-    implementation("com.google.ai.edge.generativeai:generativeai:0.4.0")
-}
+
 
 flutter {
     source = "../.."

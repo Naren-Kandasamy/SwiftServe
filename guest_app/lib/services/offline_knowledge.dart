@@ -1,5 +1,4 @@
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html show window;
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:collection';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -42,7 +41,7 @@ class OfflineKnowledgeService {
     // Flutter Web cannot render native InAppWebView — open as a new tab from asset URL
     if (kIsWeb) {
       // Construct a relative path the browser can reach from the Flutter Web asset bundle
-      html.window.open('$assetPath?lang=${appLocale.value.languageCode}', '_blank');
+      launchUrl(Uri.parse('$assetPath?lang=${appLocale.value.languageCode}'), webOnlyWindowName: '_blank');
       return;
     }
 
@@ -55,7 +54,7 @@ class OfflineKnowledgeService {
             backgroundColor: Colors.red[900],
           ),
           body: InAppWebView(
-            initialFile: assetPath,
+            initialUrlRequest: URLRequest(url: WebUri("asset:///$assetPath")),
             initialUserScripts: UnmodifiableListView<UserScript>([
               UserScript(
                 source: "window.appLang = '${appLocale.value.languageCode}';",
@@ -63,7 +62,11 @@ class OfflineKnowledgeService {
               )
             ]),
             initialSettings: InAppWebViewSettings(
-              javaScriptEnabled: true, // Enabled for TTS and Checklist
+              javaScriptEnabled: true,
+              allowFileAccess: true,
+              allowContentAccess: true,
+              allowFileAccessFromFileURLs: true,
+              allowUniversalAccessFromFileURLs: true,
               transparentBackground: true,
             ),
           ),
@@ -74,7 +77,7 @@ class OfflineKnowledgeService {
 
   static void showCustomKnowledgeScreen(BuildContext context, String title, String assetPath) {
     if (kIsWeb) {
-      html.window.open('$assetPath?lang=${appLocale.value.languageCode}', '_blank');
+      launchUrl(Uri.parse('$assetPath?lang=${appLocale.value.languageCode}'), webOnlyWindowName: '_blank');
       return;
     }
 
@@ -86,7 +89,7 @@ class OfflineKnowledgeService {
             backgroundColor: Colors.red[900],
           ),
           body: InAppWebView(
-            initialFile: assetPath,
+            initialUrlRequest: URLRequest(url: WebUri("asset:///$assetPath")),
             initialUserScripts: UnmodifiableListView<UserScript>([
               UserScript(
                 source: "window.appLang = '${appLocale.value.languageCode}';",
@@ -95,6 +98,10 @@ class OfflineKnowledgeService {
             ]),
             initialSettings: InAppWebViewSettings(
               javaScriptEnabled: true,
+              allowFileAccess: true,
+              allowContentAccess: true,
+              allowFileAccessFromFileURLs: true,
+              allowUniversalAccessFromFileURLs: true,
               transparentBackground: true,
             ),
           ),

@@ -28,6 +28,7 @@ import '../services/model_manager.dart';
 import '../services/local_triage_service.dart';
 import '../main.dart' show appLocale;
 import '../l10n/app_localizations.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class SosScreen extends StatefulWidget {
   const SosScreen({super.key});
@@ -543,12 +544,57 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
                           onPressed: () => _showLanguagePicker(context),
                         ),
                       ),
-                      // ── Knowledge library and Medical ID (right) ──────────────────
+                      // ── Knowledge library, Medical ID, and AI Status (right) ──────────────────
                       Positioned(
                         right: 0,
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
+                            ValueListenableBuilder<bool>(
+                              valueListenable: ModelManager().isDownloading,
+                              builder: (context, isDownloading, child) {
+                                return ValueListenableBuilder<bool>(
+                                  valueListenable: ModelManager().isModelReady,
+                                  builder: (context, isReady, child) {
+                                    return IconButton(
+                                      icon: Stack(
+                                        clipBehavior: Clip.none,
+                                        children: [
+                                          const Icon(Icons.smart_toy, color: Colors.white70),
+                                          Positioned(
+                                            right: -2,
+                                            top: -2,
+                                            child: Container(
+                                              width: 10,
+                                              height: 10,
+                                              decoration: BoxDecoration(
+                                                color: isReady 
+                                                  ? Colors.green 
+                                                  : (isDownloading ? Colors.orange : Colors.red),
+                                                shape: BoxShape.circle,
+                                                border: Border.all(color: Colors.black, width: 2),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      tooltip: 'Offline AI Status',
+                                      onPressed: () {
+                                        if (!isReady && !isDownloading) {
+                                          _checkModelReadiness(); // allow user to trigger download manually
+                                        } else {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text(
+                                              isReady ? 'Offline AI Ready' : 'Downloading Offline AI...',
+                                            )),
+                                          );
+                                        }
+                                      },
+                                    );
+                                  },
+                                );
+                              },
+                            ),
                             IconButton(
                               icon: const Icon(Icons.badge, color: Colors.white70),
                               tooltip: 'Medical ID',
@@ -1269,7 +1315,8 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
         });
 
         // 2. Local AI Triage (Tier 2-4)
-        final triageService = LocalTriageService(apiKey: 'AIzaSyCF6-JpASJrVHtXiUccpSsz_FpkngG_22w'); 
+        final geminiApiKey = dotenv.env['GEMINI_API_KEY'] ?? '';
+        final triageService = LocalTriageService(apiKey: geminiApiKey);
         final localResult = await triageService.processEmergency(alert.description);
         triageResult = localResult;
         
