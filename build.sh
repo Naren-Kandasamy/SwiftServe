@@ -17,3 +17,12 @@ mkdir -p dist/guest
 
 cp -r dashboard/build/web/. dist/admin/
 cp -r guest_app/build/web/. dist/guest/
+
+# Root redirect to /admin/
+cat > dist/index.html <<'EOF'
+<!DOCTYPE html>
+<html>
+<head><meta http-equiv="refresh" content="0;url=/admin/"></head>
+<body>Redirecting to dashboard...</body>
+</html>
+EOF

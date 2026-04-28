@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "public": "public",
+    "public": "dist",
     "ignore": [
       "firebase.json",
       "**/.*",
@@ -8,8 +8,12 @@
     ],
     "rewrites": [
       {
-        "source": "**",
-        "destination": "/index.html"
+        "source": "/admin/**",
+        "destination": "/admin/index.html"
+      },
+      {
+        "source": "/guest/**",
+        "destination": "/guest/index.html"
       }
     ]
   }
