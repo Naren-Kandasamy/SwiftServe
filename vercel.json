@@ -1,0 +1,8 @@
+{
+  "buildCommand": "bash build.sh",
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/admin/(.*)", "destination": "/admin/index.html" },
+    { "source": "/guest/(.*)",  "destination": "/guest/index.html" }
+  ]
+}
