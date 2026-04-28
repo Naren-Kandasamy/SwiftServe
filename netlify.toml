@@ -1,0 +1,26 @@
+# Global configuration for Netlify deployment
+# This allows you to deploy the entire project from the root.
+
+[build]
+  # This command installs Flutter (if missing) and builds both applications.
+  # It uses the pre-built shared logic automatically.
+  command = "chmod +x ./netlify-build.sh && ./netlify-build.sh"
+  publish = "dist"
+
+# Redirects for Single Page Application (SPA) support
+# This ensures that deep links (like /admin/responder) work correctly.
+[[redirects]]
+  from = "/admin/*"
+  to = "/admin/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/guest/*"
+  to = "/guest/index.html"
+  status = 200
+
+# Optional: Environment variables can also be defined here, 
+# but it is safer to do them in the Netlify UI.
+[build.environment]
+  FLUTTER_VERSION = "3.19.0"
+  FLUTTER_CHANNEL = "stable"
