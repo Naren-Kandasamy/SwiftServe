@@ -17,6 +17,9 @@ jobs:
           flutter-version: '3.x'
           channel: 'stable'
 
+      - name: Create .env file
+        run: echo "${{ secrets.DASHBOARD_ENV }}" > dashboard/.env
+
       - name: Build all apps
         run: |
           chmod +x build.sh
