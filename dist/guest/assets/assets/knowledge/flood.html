@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flood Evacuation</title>
+    
+    <link rel="stylesheet" href="css/style.css">
+    <script src="js/translations.js"></script>
+    <script src="js/app.js"></script>
+</head>
+<body>
+    <h1 data-i18n="flood_title">🌊 Flood / Water Damage</h1>
+    <div style="text-align: center; margin: 20px 0;">
+        <img src="img/flood.png" style="width:100%; max-width: 400px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+    </div>
+        <h2 data-i18n="flood_h2_1">1. Move to Higher Ground</h2>
+    <ul>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text" data-i18n="flood_step1">If water is rising, immediately move to a higher floor.</div>
+    </li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text" data-i18n="flood_step2">Do not try to walk or swim through moving water. Even 6 inches of fast-moving water can knock you down.</div>
+    </li>
+    </ul>
+
+    <h2 data-i18n="flood_h2_2">2. Electrical Hazards</h2>
+    <ul>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text"><strong>DANGER:</strong> Do not touch electrical equipment if you are wet or standing in water.</div>
+    </li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text" data-i18n="flood_step3">Turn off the main power switch if you can safely reach it WITHOUT stepping in water.</div>
+    </li>
+    </ul>
+
+    <h2 data-i18n="flood_h2_3">3. Await Rescue</h2>
+    <ul>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text" data-i18n="flood_step4">Do not climb into a closed attic where you could become trapped. Go onto the roof only if necessary.</div>
+    </li>
+        <li>
+        <div class="step-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+</div>
+        <div class="step-text" data-i18n="flood_step5">Signal for help.</div>
+    </li>
+    </ul>
+    <button id="fab-tts"></button>
+</body>
+</html>
