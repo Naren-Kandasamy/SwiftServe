@@ -183,13 +183,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (value is Map) {
           try {
             final alert = Alert.fromMap(Map<dynamic, dynamic>.from(value));
-            
-            // Serverless workaround: Dashboard acts as the triage backend
+
+            // Serverless workaround: Dashboard acts as the triage backend.
+            // Case 1: Alert is still pending — needs full AI triage.
             if (alert.status == AlertStatus.pending) {
               TriageService.processAlert(alert);
             }
 
-            // Only surface pending alerts — triaged ones appear as Incidents.
+            // Case 2: Alert was already triaged by the Guest App BEFORE the
+            // admin logged in. The Firebase Function may not have run (not
+            // deployed locally), so no Incident was ever created.
+            // We detect this by checking if the corresponding incident is
+            // missing from our in-memory list and ask TriageService to create it.
+            if (alert.status == AlertStatus.triaged) {
+              final incidentId = 'inc_${alert.id.substring(0, 8)}';
+              final hasIncident = _incidents.any((i) => i.id == incidentId);
+              if (!hasIncident) {
+                TriageService.processAlert(alert);
+              }
+            }
+
+            // Only surface pending alerts in the raw alerts list —
+            // triaged ones already appear as Incidents.
             if (alert.status == AlertStatus.pending) {
               updated.add(alert);
             }

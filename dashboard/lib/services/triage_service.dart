@@ -18,7 +18,9 @@ class TriageService {
   static final Set<String> _completedIds = {};
 
   static Future<void> processAlert(Alert alert) async {
-    if (alert.status != AlertStatus.pending) return;
+    // Accept both 'pending' (needs AI triage) and 'triaged' (already has instructions
+    // from the Guest App, just needs an Incident created on the dashboard)
+    if (alert.status != AlertStatus.pending && alert.status != AlertStatus.triaged) return;
     if (_processingIds.contains(alert.id)) return;
     if (_completedIds.contains(alert.id)) return;  // already fully processed
     
@@ -49,27 +51,30 @@ class TriageService {
     }
 
     final prompt = '''
-You are an emergency triage AI for a hospitality venue.
-Classify the incoming guest SOS alert and return ONLY valid JSON.
-CRITICAL: If an image is provided, inspect it thoroughly. If you detect smoke, fire, weapons, blood, or structural collapse, boost severity to 4 or 5 and set escalateToEmergencyServices to true.
+You are a high-stakes emergency dispatcher AI for a premium hospitality venue.
+Your mission is to provide cold, tactical, life-saving instructions to a guest in panic.
 
-MULTILINGUAL SUPPORT: You must automatically detect the language the Guest SOS Message is written in. The `immediateInstructions` field you generate MUST be written in the exact same language the guest used. For example, if they type in Spanish, your instructions must be in Spanish.
+CRITICAL CONSTRAINTS:
+1. DO NOT tell the user to "call 911", "contact management", or "find a staff member". Assume we have already done this.
+2. DO NOT use conversational filler like "I'm sorry to hear that" or "Stay calm".
+3. Provide ONLY specific, physical, tactical actions they must perform RIGHT NOW (e.g., "Press a clean towel into the wound", "Stay 12 inches from the floor to avoid smoke", "Barricade the door with heavy furniture").
+4. If an image is provided, analyze it for specific hazards (blood, fire, weapons) and reference them in your instructions.
 
-Severity scale — use the FULL range 1–5:
-1 = Minor nuisance. No danger. (e.g. noisy neighbour, lost key, dripping tap, mild headache)
-2 = Low concern. Monitoring only. (e.g. small cut needing first aid, suspicious person seen briefly, flickering lights)
-3 = Active incident. Staff response needed. (e.g. moderate injury, small fire in bin, security dispute, power outage affecting a room)
-4 = Serious emergency. Emergency services likely needed. (e.g. cardiac arrest, large fire, assault, structural damage)
-5 = Mass casualty / catastrophic. Emergency services required immediately. (e.g. explosion, mass stabbing, building collapse, gas leak with fire)
+MULTILINGUAL SUPPORT: You MUST detect the guest's language. The `immediateInstructions` MUST be written in the exact same language.
 
-Default to 1 or 2 for vague or low-risk descriptions. Only go to 3+ when there is clear immediate danger.
+Severity scale (1–5):
+1 = Minor nuisance (noisy neighbor, lost key).
+2 = Low concern (small cut, flickering light).
+3 = Active incident. Staff response needed (moderate injury, bin fire).
+4 = Serious emergency. Life at risk (cardiac arrest, large fire, assault).
+5 = Mass casualty / catastrophic (active shooter, building collapse, gas explosion).
 
 Output format:
 {
   "type": "fire" | "medical" | "security" | "infrastructure" | "other",
   "severity": <integer 1-5>,
-  "immediateInstructions": "<3-4 sentence safety instruction IN THE EXACT SAME LANGUAGE AS THE SOS MESSAGE>",
-  "language": "<ISO 639-1 code of guest's language>",
+  "immediateInstructions": "1. [Specific Tactical Step]\n2. [Specific Tactical Step]\n3. [Specific Tactical Step]",
+  "language": "<ISO 639-1 code>",
   "escalateToEmergencyServices": <boolean>
 }
 
@@ -109,6 +114,24 @@ Location: Room ${alert.roomNumber}, Floor ${alert.floor}
       "immediateInstructions": curatedAdvice,
       "escalateToEmergencyServices": false
     };
+
+    // ── Short-circuit for already-triaged alerts ──────────────────────────────
+    // If the Guest App's background Gemini call already triaged this alert before
+    // any admin was logged in, we skip the AI call and just create the incident.
+    if (alert.status == AlertStatus.triaged && alert.safetyInstructions != null) {
+      print('[TriageService] Alert ${alert.id} already triaged by Guest App. Creating incident directly...');
+      triageResult = {
+        "type": alert.type?.name ?? "other",
+        "severity": alert.severity ?? curatedSeverity,
+        "immediateInstructions": alert.safetyInstructions,
+        "escalateToEmergencyServices": (alert.severity ?? 3) >= 4,
+      };
+      // Skip all Gemini logic, jump straight to incident creation
+      await _createIncident(alert, triageResult);
+      _completedIds.add(alert.id);
+      _processingIds.remove(alert.id);
+      return;
+    }
 
     int maxRetries = 3;
     bool success = false;
@@ -199,10 +222,34 @@ Location: Room ${alert.roomNumber}, Floor ${alert.floor}
       'status': AlertStatus.triaged.name,
     });
 
-    // 2. Aggregate the raw Alert into an actionable Dashboard Incident
+    await _createIncident(alert, triageResult, resolvedImageUrl: resolvedImageUrl);
+
+    // Mark as permanently done so stream re-fires are ignored
+    _completedIds.add(alert.id);
+    _processingIds.remove(alert.id);
+  }
+
+  /// Aggregates a triaged alert into an actionable Dashboard Incident and
+  /// fires a browser notification. Extracted so both the AI path and the
+  /// short-circuit path (guest-app pre-triaged) can share this logic.
+  static Future<void> _createIncident(
+    Alert alert,
+    Map<String, dynamic> triageResult, {
+    String? resolvedImageUrl,
+  }) async {
     final incidentId = 'inc_${alert.id.substring(0, 8)}';
+
+    // Idempotency check: do NOT overwrite an incident that already exists
+    final existingSnap = await FirebaseDatabase.instance
+        .ref('venues/$_venueId/incidents/$incidentId')
+        .get();
+    if (existingSnap.exists) {
+      print('[TriageService] Incident $incidentId already exists — skipping creation.');
+      return;
+    }
+
     final timestamp = DateTime.now().millisecondsSinceEpoch;
-    
+
     EmergencyType parsedType = EmergencyType.other;
     try {
       final String triageType = triageResult['type']?.toString().toLowerCase() ?? 'other';
@@ -211,7 +258,7 @@ Location: Room ${alert.roomNumber}, Floor ${alert.floor}
 
     final severity = triageResult['severity'] as int? ?? 3;
     bool shouldEscalate = triageResult['escalateToEmergencyServices'] == true;
-    
+
     // Auto-escalate severe fires (Level 4+)
     if (parsedType == EmergencyType.fire && severity >= 4) {
       shouldEscalate = true;
@@ -219,10 +266,9 @@ Location: Room ${alert.roomNumber}, Floor ${alert.floor}
 
     final timeline = [
       IncidentUpdate(timestamp: timestamp, updateText: 'SOS Received: "${alert.description}"'),
-      IncidentUpdate(timestamp: timestamp + 50, updateText: 'AI Triaged as ${parsedType.name.toUpperCase()} (Severity $severity).')
+      IncidentUpdate(timestamp: timestamp + 50, updateText: 'AI Triaged as ${parsedType.name.toUpperCase()} (Severity $severity).'),
     ];
 
-    // Explicitly add escalation to timeline so the user is notified
     if (shouldEscalate) {
       timeline.add(IncidentUpdate(timestamp: timestamp + 100, updateText: 'Escalated to Emergency Services'));
     }
@@ -237,27 +283,25 @@ Location: Room ${alert.roomNumber}, Floor ${alert.floor}
       status: shouldEscalate ? IncidentStatus.escalated : IncidentStatus.active,
       guestCount: 1,
       createdAt: timestamp,
-      imageUrl: resolvedImageUrl, // pass down the resolved image URL
+      imageUrl: resolvedImageUrl ?? alert.imageUrl,
       timeline: timeline,
       roomKey: alert.roomKey,
       medicalInfo: alert.medicalInfo,
     );
 
-    await FirebaseDatabase.instance.ref('venues/$_venueId/incidents/$incidentId').set(incident.toMap());
-    
-    // Wake up background staff running the web dashboard via native push
+    await FirebaseDatabase.instance
+        .ref('venues/$_venueId/incidents/$incidentId')
+        .set(incident.toMap());
+
+    // Wake up background staff via browser notification
     try {
       if (html.Notification.permission == 'granted') {
         html.Notification(
-          '🚨 NEW ALERT: ${parsedType.name.toUpperCase()} (Severity ${triageResult['severity']})',
+          '🚨 NEW ALERT: ${parsedType.name.toUpperCase()} (Severity $severity)',
           body: 'Room ${alert.roomNumber}: ${alert.description}',
-          icon: '/favicon.png', // Or similar absolute asset path
+          icon: '/favicon.png',
         );
       }
     } catch (_) {}
-
-    // Mark as permanently done so stream re-fires are ignored
-    _completedIds.add(alert.id);
-    _processingIds.remove(alert.id);
   }
 }

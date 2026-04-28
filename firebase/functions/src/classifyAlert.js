@@ -5,7 +5,7 @@ const { buildClassificationPrompt } = require('./prompts/classificationPrompt');
 // Initialize Vertex AI with Application Default Credentials
 // For local emulation without credentials, we wrap the AI call in a try/catch
 const vertexAI = new VertexAI({ project: process.env.GCLOUD_PROJECT || 'swiftserve-18547', location: 'us-central1' });
-const generativeModel = vertexAI.getGenerativeModel({ model: 'gemini-1.5-flash-preview-0514' });
+const generativeModel = vertexAI.getGenerativeModel({ model: 'gemini-1.5-flash' }); // Upgraded to stable
 
 /**
  * Triggered on new SOS alert creation. 
@@ -18,9 +18,20 @@ async function processAlert(snapshot, context) {
 
   console.log(`[classifyAlert] Processing new alert: ${alertId} at venue: ${venueId}`);
 
+  // If the Guest App (Gemini 2.5) already triaged this and provided instructions, 
+  // skip the backend AI call to prevent race conditions and save costs.
   let triageResult;
-
-  try {
+  if (alert.safetyInstructions && alert.status === 'triaged') {
+    console.log(`[classifyAlert] Alert already triaged by client. Skipping backend Gemini call.`);
+    triageResult = {
+      type: alert.type,
+      severity: alert.severity,
+      language: alert.language || 'en',
+      immediateInstructions: alert.safetyInstructions,
+      escalateToEmergencyServices: alert.severity >= 4
+    };
+  } else {
+    try {
     const prompt = buildClassificationPrompt(alert.description, alert.roomNumber, alert.floor);
     
     // Using temperature 0.2 for deterministic JSON classification
@@ -52,6 +63,7 @@ async function processAlert(snapshot, context) {
       escalateToEmergencyServices: false
     };
   }
+  } // Close the else block
 
   // 1. Update the original Alert to "triaged"
   const db = admin.database();
@@ -59,7 +71,7 @@ async function processAlert(snapshot, context) {
     type: triageResult.type,
     severity: triageResult.severity,
     language: triageResult.language,
-    safetyInstructions: triageResult.immediateInstructions,
+    safetyInstructions: `[Cloud Function] ${triageResult.immediateInstructions}`,
     status: 'triaged'
   });
 

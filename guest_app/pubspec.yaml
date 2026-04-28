@@ -50,7 +50,7 @@ dependencies:
   url_launcher: ^6.2.5
   dio: ^5.4.1
   path_provider: ^2.1.2
-  google_generative_ai: ^0.2.1
+  google_generative_ai: ^0.4.3
   intl: ^0.20.2
   flutter_dotenv: ^5.2.1
   flutter_localizations:
@@ -84,6 +84,9 @@ flutter:
 
   assets:
     - assets/knowledge/
+    - assets/knowledge/css/
+    - assets/knowledge/js/
+    - assets/knowledge/img/
     - .env
 
   # An image asset can refer to one or more resolution-specific "variants", see

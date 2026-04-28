@@ -11,9 +11,9 @@ class ModelManager {
   final ValueNotifier<bool> isDownloading = ValueNotifier(false);
   final ValueNotifier<bool> isModelReady = ValueNotifier(false);
 
-  // Gemma 3 270M IT — Q8 Quantized (optimized for mobile offline inference)
-  static const String _modelUrl = 'https://huggingface.co/litert-community/gemma-3-270m-it/resolve/main/gemma3-270m-it-q8.task';
-  static const String _modelId = 'gemma3-270m-it-q8.task';
+  // Gemma 3 1B IT — Q4 Quantized (upgraded from 270M which was too small for instruction following)
+  static const String _modelUrl = 'https://huggingface.co/litert-community/Gemma3-1B-IT/resolve/main/gemma3-1b-it-int4.task';
+  static const String _modelId = 'gemma3-1b-it-int4.task';
 
   /// Check if the model is already present on device and initialize it.
   Future<void> init() async {

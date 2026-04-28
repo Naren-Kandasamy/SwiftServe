@@ -93,7 +93,6 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
     
     // Initialize Offline Services
     SyncService().init();
-    ModelManager().init();
 
     _loadStayInfo();
     _checkActiveAlert();
@@ -103,9 +102,10 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
   }
 
   Future<void> _checkModelReadiness() async {
+    // Wait for the native plugin to actually check the disk
+    await ModelManager().init();
+    
     if (!ModelManager().isModelReady.value && !ModelManager().isDownloading.value) {
-      // Small delay to let the UI settle
-      await Future.delayed(const Duration(seconds: 1));
       if (!mounted) return;
 
       final bool? wantDownload = await showDialog<bool>(
@@ -122,7 +122,7 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
             ],
           ),
           content: const Text(
-            'To ensure life-saving instructions work without any internet connection, CrisisNet needs to download a compact, high-speed AI model (Qwen 0.5B).\n\nSize: ~390MB\nRecommended: Download on WiFi.',
+            'To ensure life-saving instructions work without any internet connection, CrisisNet needs to download a compact, high-speed AI model (Gemma 3 1B).\n\nSize: ~530MB\nRecommended: Download on WiFi.',
             style: TextStyle(color: Colors.white70, height: 1.4),
           ),
           actions: [
@@ -504,6 +504,7 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
+      resizeToAvoidBottomInset: false, // Prevent keyboard from pushing up the SOS button
       // ── Pinned SOS button — always visible, never fights for space ──
       bottomNavigationBar: SafeArea(
         child: Padding(
@@ -601,7 +602,10 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
           ),
         ),
       ),
-      body: Container(
+      body: GestureDetector(
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+        behavior: HitTestBehavior.opaque,
+        child: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
@@ -814,7 +818,7 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
                                 children: [
                                   Icon(Icons.download, color: Colors.blueAccent, size: 16),
                                   SizedBox(width: 12),
-                                  Expanded(child: Text('Tap to Download Qwen 0.5B Offline AI (~390MB)', style: TextStyle(color: Colors.blueAccent, fontSize: 12, fontWeight: FontWeight.bold))),
+                                  Expanded(child: Text('Tap to Download Gemma 3 1B Offline AI (~530MB)', style: TextStyle(color: Colors.blueAccent, fontSize: 12, fontWeight: FontWeight.bold))),
                                 ],
                               ),
                             ),
@@ -1059,6 +1063,7 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
           ),
         ),
       ),
+    ), // closes GestureDetector
     );
   }
 
@@ -1105,6 +1110,9 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
 
   Future<void> _triggerSOS() async {
     if (_isSubmitting) return;
+
+    // Dismiss keyboard immediately so nothing is blocked during the consent dialog
+    FocusManager.instance.primaryFocus?.unfocus();
 
     // Strict Location Privacy Gate (GDPR compliant)
     bool? consentGiven = await showDialog<bool>(
@@ -1219,6 +1227,33 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
             ),
           );
 
+          // ── Background: Guest-side Gemini triage (independent of dashboard) ──
+          // This ensures the guest gets AI advice immediately even if the dashboard
+          // is not open. Writes safetyInstructions back to Firebase.
+          Future(() async {
+            try {
+              final geminiApiKey = dotenv.env['GEMINI_API_KEY'] ?? '';
+              final triageService = LocalTriageService(apiKey: geminiApiKey);
+              final result = await triageService.processEmergency(
+                alert.description,
+                selectedType: _selectedEmergencyType ?? 'other',
+              );
+              final advice = result['content'] as String?;
+              if (advice != null && advice.isNotEmpty) {
+                await FirebaseDatabase.instance
+                    .ref('venues/${alert.venueId}/alerts/$alertId')
+                    .update({
+                      'safetyInstructions': advice,
+                      'status': AlertStatus.triaged.name,
+                      'aiSource': (result['source'] as TriageSource).label,
+                    });
+                debugPrint('[SosScreen] Guest-side Gemini triage written to Firebase.');
+              }
+            } catch (e) {
+              debugPrint('[SosScreen] Background triage failed: $e');
+            }
+          });
+
           // Background image upload
           if (_attachedImage != null) {
             Future(() async {
@@ -1261,7 +1296,10 @@ class _SosScreenState extends State<SosScreen> with SingleTickerProviderStateMix
         // 2. Local AI Triage (Tier 2-4)
         final geminiApiKey = dotenv.env['GEMINI_API_KEY'] ?? '';
         final triageService = LocalTriageService(apiKey: geminiApiKey);
-        final localResult = await triageService.processEmergency(alert.description);
+        final localResult = await triageService.processEmergency(
+          alert.description,
+          selectedType: _selectedEmergencyType ?? 'other',
+        );
         triageResult = localResult;
         
         // Update alert with offline triage results

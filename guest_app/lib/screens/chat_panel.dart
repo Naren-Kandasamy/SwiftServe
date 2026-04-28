@@ -84,10 +84,8 @@ class _ChatPanelState extends State<ChatPanel> {
         .set(chatMsg.toMap());
   }
 
-  @override
   Widget build(BuildContext context) {
     return Container(
-      height: 300,
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: Colors.white12, width: 2)),
       ),
@@ -100,13 +98,13 @@ class _ChatPanelState extends State<ChatPanel> {
               children: [
                 Icon(Icons.message, color: Colors.blueAccent, size: 16),
                 SizedBox(width: 8),
-                Text('Direct Message to Staff', style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                Text('Direct Message to Responder', style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 12)),
               ],
             ),
           ),
           Expanded(
             child: _messages.isEmpty
-                ? const Center(child: Text('Awaiting staff message...', style: TextStyle(color: Colors.white30)))
+                ? const Center(child: Text('Awaiting responder message...', style: TextStyle(color: Colors.white30)))
                 : ListView.builder(
                     controller: _scrollController,
                     padding: const EdgeInsets.all(12),
@@ -142,7 +140,7 @@ class _ChatPanelState extends State<ChatPanel> {
                             crossAxisAlignment: alignRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                             children: [
                               if (msg.isStaff)
-                                Text(isResponder ? 'EMERGENCY SERVICES' : 'STAFF', style: TextStyle(color: isResponder ? Colors.orange[200] : Colors.grey[400], fontSize: 10, fontWeight: FontWeight.bold)),
+                                Text(isResponder ? 'EMERGENCY SERVICES' : 'RESPONDER', style: TextStyle(color: isResponder ? Colors.orange[200] : Colors.blueAccent, fontSize: 10, fontWeight: FontWeight.bold)),
                               if (msg.isStaff) const SizedBox(height: 2),
                               Text(displayText, style: const TextStyle(color: Colors.white, fontSize: 13)),
                             ],

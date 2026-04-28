@@ -60,3 +60,6 @@ unresolved_issues.txt
 # Local SDK
 android-sdk/
 
+# Build Output
+dist/
+web-script.sh

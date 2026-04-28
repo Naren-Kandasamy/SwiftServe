@@ -35,14 +35,15 @@ class DefaultFirebaseOptions {
   );
 
   // ─── Android ────────────────────────────────────────────────────────────────
-  // Replace every value here with what you see in Firebase Console → Android App Config
+  // Using shared project credentials — replace appId with the Android-specific
+  // value from Firebase Console → Project Settings → Android App if available.
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'YOUR_ANDROID_API_KEY',
-    appId: 'YOUR_ANDROID_APP_ID',
-    messagingSenderId: 'YOUR_SENDER_ID',
-    projectId: 'YOUR_PROJECT_ID',
+    apiKey: 'AIzaSyDdfN24mSTHuxE2UV8oghB0fQwdRnTsfu8',
+    appId: '1:501246692657:android:c6d919305888bddce43410',
+    messagingSenderId: '501246692657',
+    projectId: 'swiftserve-18547',
     databaseURL: 'https://swiftserve-18547-default-rtdb.asia-southeast1.firebasedatabase.app',
-    storageBucket: 'YOUR_PROJECT_ID.appspot.com',
+    storageBucket: 'swiftserve-18547.firebasestorage.app',
   );
 
   // ─── iOS ────────────────────────────────────────────────────────────────────

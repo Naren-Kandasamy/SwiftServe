@@ -143,7 +143,9 @@ class _StatusScreenState extends State<StatusScreen> {
 
             // AI Instructions Header
             if (_alert!.safetyInstructions != null)
-              Container(
+              Flexible(
+                flex: 3,
+                child: Container(
                 margin: const EdgeInsets.all(16),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -164,27 +166,46 @@ class _StatusScreenState extends State<StatusScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Row(
-                          children: [
-                            Icon(Icons.smart_toy, color: Colors.redAccent, size: 20),
-                            SizedBox(width: 8),
-                            Text('AI SAFETY INSTRUCTIONS', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-                          ],
+                        Expanded(
+                          child: Row(
+                            children: [
+                              const Icon(Icons.smart_toy, color: Colors.redAccent, size: 18),
+                              const SizedBox(width: 6),
+                              const Flexible(
+                                child: Text(
+                                  'AI SAFETY INSTRUCTIONS',
+                                  style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, letterSpacing: 1.0, fontSize: 13),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                         if (widget.aiSource != null)
-                          Text(
-                            'Source: ${widget.aiSource}',
-                            style: const TextStyle(color: Colors.white24, fontSize: 10, fontWeight: FontWeight.bold),
+                          Container(
+                            margin: const EdgeInsets.only(left: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.white10,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              widget.aiSource!.replaceAll('[', '').replaceAll(']', ''),
+                              style: const TextStyle(color: Colors.white38, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                       ],
                     ),
                     const SizedBox(height: 12),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxHeight: 250),
-                      child: SingleChildScrollView(
-                        child: Text(
-                          _alert!.safetyInstructions!,
-                          style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.4),
+                    Flexible(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 250),
+                        child: SingleChildScrollView(
+                          child: Text(
+                            _alert!.safetyInstructions!,
+                            style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.4),
+                          ),
                         ),
                       ),
                     ),
@@ -229,7 +250,7 @@ class _StatusScreenState extends State<StatusScreen> {
                       ),
                   ],
                 ),
-              )
+              ))
             else
               Padding(
                 padding: const EdgeInsets.all(24.0),
@@ -254,6 +275,7 @@ class _StatusScreenState extends State<StatusScreen> {
             ),
             
             Expanded(
+              flex: 1,
               child: _incident == null
                   ? Center(child: Text(AppLocalizations.of(context)!.statusWaiting, style: const TextStyle(color: Colors.white30)))
                   : ListView.builder(
@@ -292,7 +314,10 @@ class _StatusScreenState extends State<StatusScreen> {
 
             // Live Chat Panel
             if (_incident != null)
-              ChatPanel(incident: _incident!),
+              Expanded(
+                flex: 2,
+                child: ChatPanel(incident: _incident!),
+              ),
 
             // Bottom Status Banner
             Container(

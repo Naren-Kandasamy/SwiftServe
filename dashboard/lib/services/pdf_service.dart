@@ -98,7 +98,7 @@ class PdfService {
                       ),
                       pw.SizedBox(height: 4),
                       pw.Text(
-                        'URL: crisisnet.app/#/responder   |   ACCESS PIN: ${incident.responderPin}',
+                        'URL: http://${html.window.location.host}/#/responder   |   ACCESS PIN: ${incident.responderPin}',
                         style: pw.TextStyle(color: PdfColors.black, fontWeight: pw.FontWeight.bold, fontSize: 16),
                       ),
                     ],

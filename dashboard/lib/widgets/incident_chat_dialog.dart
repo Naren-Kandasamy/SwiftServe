@@ -144,7 +144,7 @@ class _IncidentChatDialogState extends State<IncidentChatDialog> {
                         final isMe = msg.isStaff && msg.text.startsWith('[$label]');
                         final timeString = DateTime.fromMillisecondsSinceEpoch(msg.timestamp).toString().substring(11, 16);
                         
-                        String roleLabel = alignRight ? 'Staff' : 'Guest';
+                        String roleLabel = alignRight ? 'Responder' : 'Guest';
                         String displayMsg = msg.text;
                         
                         if (alignRight) {
